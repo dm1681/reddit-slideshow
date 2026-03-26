@@ -134,4 +134,99 @@ async function loadMorePosts() {
   }
 }
 
+// --- Message API ---
+
+browser.runtime.onMessage.addListener((message, sender) => {
+  switch (message.type) {
+    case "startSlideshow":
+      return handleStartSlideshow(message, sender);
+    case "getCurrentState":
+      return handleGetCurrentState();
+    case "getPosts":
+      return handleGetPosts(message);
+    case "popOut":
+      return handlePopOut(sender);
+    case "closeSlideshow":
+      return handleCloseSlideshow();
+    default:
+      return Promise.resolve({ error: "Unknown message type" });
+  }
+});
+
+async function handleStartSlideshow(message, sender) {
+  const { subreddit, sort } = message;
+  await loadPosts(subreddit, sort);
+
+  // Filter to image-only for Phase 1
+  session.posts = session.posts.filter((p) => p.type === "image");
+
+  // Send showOverlay to the active tab's content script
+  const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+  if (tabs.length > 0) {
+    session.tabId = tabs[0].id;
+    await browser.tabs.sendMessage(tabs[0].id, { type: "showOverlay" });
+  }
+
+  return { success: true, postCount: session.posts.length };
+}
+
+async function handleGetCurrentState() {
+  if (!session) {
+    return { error: "No active session" };
+  }
+  return {
+    subreddit: session.subreddit,
+    sort: session.sort,
+    posts: session.posts,
+    currentIndex: session.currentIndex,
+    exhausted: session.exhausted,
+  };
+}
+
+async function handleGetPosts(message) {
+  if (!session) return { error: "No active session" };
+
+  const { startIndex, count } = message;
+  const posts = session.posts.slice(startIndex, startIndex + count);
+
+  // Preemptive fetch: if requesting near the end, load more and return updated list
+  if (startIndex + count >= session.posts.length - 5) {
+    await loadMorePosts();
+  }
+
+  return { posts: session.posts, total: session.posts.length, exhausted: session.exhausted };
+}
+
+async function handlePopOut(sender) {
+  if (!session) return { error: "No active session" };
+
+  // Open slideshow in new window
+  const slideshowUrl = browser.runtime.getURL("slideshow/slideshow.html?mode=popout");
+  await browser.windows.create({
+    url: slideshowUrl,
+    type: "popup",
+    width: 1200,
+    height: 800,
+  });
+
+  // Remove overlay from the original tab
+  if (session.tabId) {
+    await browser.tabs.sendMessage(session.tabId, { type: "hideOverlay" });
+  }
+
+  return { success: true };
+}
+
+async function handleCloseSlideshow() {
+  if (session && session.tabId) {
+    try {
+      await browser.tabs.sendMessage(session.tabId, { type: "hideOverlay" });
+    } catch (e) {
+      // Tab may have been closed — ignore
+    }
+  }
+  session = null;
+  return { success: true };
+}
+
 console.log("Reddit Slideshow background loaded");
