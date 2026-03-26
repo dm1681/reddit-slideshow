@@ -1,4 +1,6 @@
 // Reddit Slideshow — embed renderer (iframes for third-party content)
+// Embeds don't auto-advance — we can't detect when cross-origin content finishes.
+// User must manually advance past embeds (arrow keys or click).
 
 const EmbedRenderer = {
   render(post, container, onEnded) {
@@ -29,15 +31,10 @@ const EmbedRenderer = {
 
     container.appendChild(iframe);
 
-    // Embeds can't signal when done — use a timer fallback if auto-advancing
-    let timer = null;
-    if (onEnded) {
-      // Give embeds a generous duration (30s) since we can't detect their end
-      timer = setTimeout(onEnded, 30000);
-    }
+    // No auto-advance for embeds — user must manually advance
+    // (we can't detect when cross-origin iframe content finishes)
 
     return () => {
-      if (timer) clearTimeout(timer);
       iframe.src = "about:blank";
       container.innerHTML = "";
     };
