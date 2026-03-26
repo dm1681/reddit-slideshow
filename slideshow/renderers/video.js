@@ -1,7 +1,7 @@
 // Reddit Slideshow — video renderer
 
 const VideoRenderer = {
-  render(post, container) {
+  render(post, container, onEnded) {
     container.innerHTML = "";
 
     const spinner = document.createElement("div");
@@ -11,7 +11,7 @@ const VideoRenderer = {
     const video = document.createElement("video");
     video.controls = true;
     video.autoplay = true;
-    video.loop = true;
+    video.loop = !onEnded; // Only loop if auto-advance is off
     video.muted = false;
     video.playsInline = true;
     video.style.cssText = "max-width:100%;max-height:100%;object-fit:contain;opacity:0;transition:opacity 0.3s ease;";
@@ -30,6 +30,10 @@ const VideoRenderer = {
       container.appendChild(errDiv);
     });
 
+    if (onEnded) {
+      video.addEventListener("ended", onEnded);
+    }
+
     video.src = post.mediaUrl;
     container.appendChild(video);
 
@@ -41,6 +45,6 @@ const VideoRenderer = {
   },
 
   preload(post) {
-    // No preloading for video — too expensive
+    // No preloading for video
   },
 };

@@ -1,7 +1,7 @@
 // Reddit Slideshow — embed renderer (iframes for third-party content)
 
 const EmbedRenderer = {
-  render(post, container) {
+  render(post, container, onEnded) {
     container.innerHTML = "";
 
     const spinner = document.createElement("div");
@@ -29,7 +29,15 @@ const EmbedRenderer = {
 
     container.appendChild(iframe);
 
+    // Embeds can't signal when done — use a timer fallback if auto-advancing
+    let timer = null;
+    if (onEnded) {
+      // Give embeds a generous duration (30s) since we can't detect their end
+      timer = setTimeout(onEnded, 30000);
+    }
+
     return () => {
+      if (timer) clearTimeout(timer);
       iframe.src = "about:blank";
       container.innerHTML = "";
     };

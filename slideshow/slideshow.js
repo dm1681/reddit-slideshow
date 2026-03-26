@@ -22,8 +22,6 @@
   let currentIndex = 0;
   let cleanupCurrentRender = null;
   let autoAdvanceOn = false;
-  let autoAdvanceInterval = 5000; // 5 seconds
-  let autoAdvanceTimer = null;
   let exhausted = false;
   let fetchInProgress = false;
 
@@ -82,8 +80,9 @@
 
     // Get renderer for post type
     const renderer = renderers[post.type];
+    const onEnded = autoAdvanceOn ? () => autoAdvanceNext() : null;
     if (renderer) {
-      cleanupCurrentRender = renderer.render(post, contentContainer);
+      cleanupCurrentRender = renderer.render(post, contentContainer, onEnded);
     } else {
       const unsupportedDiv = document.createElement("div");
       unsupportedDiv.style.cssText = "color:#777;font-size:14px;";
@@ -168,7 +167,6 @@
     if (currentIndex < posts.length - 1) {
       currentIndex++;
       renderCurrentPost();
-      resetAutoAdvance();
     }
   }
 
@@ -176,43 +174,37 @@
     if (currentIndex > 0) {
       currentIndex--;
       renderCurrentPost();
-      resetAutoAdvance();
     }
   }
 
-  // --- Auto-advance ---
+  // --- Auto-advance (event-driven) ---
+  // Videos/gifs advance when they finish playing.
+  // Images advance after a 5s timer.
+  // Embeds advance after a 30s timer (can't detect end).
+  // Toggling auto-advance re-renders the current post to attach/detach the onEnded callback.
+
+  function autoAdvanceNext() {
+    if (!autoAdvanceOn) return;
+    if (currentIndex < posts.length - 1) {
+      currentIndex++;
+      renderCurrentPost();
+    } else if (exhausted) {
+      stopAutoAdvance();
+    }
+  }
+
   function startAutoAdvance() {
     autoAdvanceOn = true;
-    autoAdvanceBtn.textContent = `⏱ ${autoAdvanceInterval / 1000}s`;
-    autoAdvanceTimer = setInterval(() => {
-      if (currentIndex < posts.length - 1) {
-        goNext();
-      } else if (exhausted) {
-        stopAutoAdvance();
-      }
-    }, autoAdvanceInterval);
+    autoAdvanceBtn.textContent = "⏱ Auto";
+    // Re-render current post to attach onEnded callback
+    renderCurrentPost();
   }
 
   function stopAutoAdvance() {
     autoAdvanceOn = false;
     autoAdvanceBtn.textContent = "⏱ Off";
-    if (autoAdvanceTimer) {
-      clearInterval(autoAdvanceTimer);
-      autoAdvanceTimer = null;
-    }
-  }
-
-  function resetAutoAdvance() {
-    if (autoAdvanceOn) {
-      clearInterval(autoAdvanceTimer);
-      autoAdvanceTimer = setInterval(() => {
-        if (currentIndex < posts.length - 1) {
-          goNext();
-        } else if (exhausted) {
-          stopAutoAdvance();
-        }
-      }, autoAdvanceInterval);
-    }
+    // Re-render to remove onEnded callback (videos will loop again)
+    renderCurrentPost();
   }
 
   function toggleAutoAdvance() {
