@@ -21,19 +21,27 @@ function scrapePosts() {
     const score = parseInt(el.getAttribute("score") || "0", 10);
     const permalink = el.getAttribute("permalink") || "";
     const contentHref = el.getAttribute("content-href") || "";
+    const postType = el.getAttribute("post-type") || "";
 
-    // Find image URL — check content-href first, then look for images in the post
+    // Determine image URL based on post-type attribute and content
     let mediaUrl = null;
-    if (/\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i.test(contentHref)) {
+
+    // post-type="image" — content-href is the direct image URL
+    if (postType === "image" && contentHref) {
       mediaUrl = contentHref;
     }
+
+    // Fallback: check content-href for image extensions
+    if (!mediaUrl && /\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i.test(contentHref)) {
+      mediaUrl = contentHref;
+    }
+
+    // Fallback: look for preview/full images inside the post element
     if (!mediaUrl) {
-      // Look for preview/full images inside the post element
       const img = el.querySelector(
         'img[src*="i.redd.it"], img[src*="preview.redd.it"], img[src*="i.imgur.com"], img[src*="external-preview"]'
       );
       if (img) {
-        // Prefer the highest-res version
         mediaUrl = img.src;
       }
     }
