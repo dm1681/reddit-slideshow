@@ -104,10 +104,16 @@
 
   function updatePostInfo(post) {
     postTitle.textContent = post.title;
-    const scoreFormatted = post.score >= 1000
-      ? `${(post.score / 1000).toFixed(1)}k`
-      : post.score;
-    postMeta.textContent = `r/${post.subreddit} · ${scoreFormatted} ↑ · u/${post.author}`;
+    const parts = [];
+    if (post.subreddit) parts.push(`r/${post.subreddit}`);
+    if (post.score) {
+      const scoreFormatted = post.score >= 1000
+        ? `${(post.score / 1000).toFixed(1)}k`
+        : post.score;
+      parts.push(`${scoreFormatted} ↑`);
+    }
+    if (post.author) parts.push(`u/${post.author}`);
+    postMeta.textContent = parts.join(" · ");
   }
 
   function updateProgress() {
