@@ -9,7 +9,10 @@
   },
   "permissions": [
     "activeTab",
-    "tabs"
+    "tabs",
+    "*://*.redd.it/*",
+    "*://*.reddit.com/*",
+    "*://*.imgur.com/*"
   ],
   "browser_action": {
     "default_icon": "icons/icon-48.png",
