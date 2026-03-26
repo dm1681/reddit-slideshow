@@ -1,8 +1,59 @@
-// Reddit Slideshow — background script (state relay, no external API calls)
+// Reddit Slideshow — background script
 
 // --- Session state ---
 
 let session = null;
+
+// --- Redgifs API (resolve direct MP4 URLs) ---
+
+let redgifsToken = null;
+let redgifsTokenExpiry = 0;
+
+async function getRedgifsToken() {
+  if (redgifsToken && Date.now() < redgifsTokenExpiry) {
+    return redgifsToken;
+  }
+  const resp = await fetch("https://api.redgifs.com/v2/auth/temporary");
+  if (!resp.ok) return null;
+  const data = await resp.json();
+  redgifsToken = data.token;
+  redgifsTokenExpiry = Date.now() + (data.expires_in || 3600) * 1000 - 60000;
+  return redgifsToken;
+}
+
+async function resolveRedgifsUrl(id) {
+  const token = await getRedgifsToken();
+  if (!token) return null;
+  const resp = await fetch(`https://api.redgifs.com/v2/gifs/${id}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Referer: "https://www.redgifs.com/",
+    },
+  });
+  if (!resp.ok) return null;
+  const data = await resp.json();
+  return (data.gif && data.gif.urls && (data.gif.urls.hd || data.gif.urls.sd)) || null;
+}
+
+// --- Resolve embed posts to direct video URLs ---
+
+async function resolvePost(post) {
+  // Redgifs embeds → direct video
+  if (post.type === "embed" && post.originalUrl) {
+    const match = post.originalUrl.match(/redgifs\.com\/(?:watch|ifr)\/(\w+)/i);
+    if (match) {
+      const mp4Url = await resolveRedgifsUrl(match[1]);
+      if (mp4Url) {
+        return { ...post, type: "video", mediaUrl: mp4Url };
+      }
+    }
+  }
+  return post;
+}
+
+async function resolvePosts(posts) {
+  return Promise.all(posts.map(resolvePost));
+}
 
 // --- Message API ---
 
@@ -24,7 +75,6 @@ browser.runtime.onMessage.addListener((message, sender) => {
 });
 
 async function handleStartSlideshow() {
-  // Create fresh session
   session = {
     posts: [],
     currentIndex: 0,
@@ -33,7 +83,6 @@ async function handleStartSlideshow() {
     tabId: null,
   };
 
-  // Tell the content script to scrape posts and show the overlay
   const tabs = await browser.tabs.query({ active: true, currentWindow: true });
   if (tabs.length === 0) {
     return { error: "No active tab" };
@@ -42,26 +91,19 @@ async function handleStartSlideshow() {
   session.tabId = tabs[0].id;
 
   try {
-    console.log("[reddit-slideshow] sending scrapeAndStart to tab", tabs[0].id);
     const result = await browser.tabs.sendMessage(tabs[0].id, { type: "scrapeAndStart" });
-    console.log("[reddit-slideshow] scrapeAndStart response:", JSON.stringify(result).substring(0, 200));
-    // Content script returns scraped posts in the response
     if (result && result.posts) {
-      session.posts = result.posts;
-      console.log("[reddit-slideshow] stored", session.posts.length, "posts in session");
-    } else {
-      console.log("[reddit-slideshow] NO posts in response. result:", result);
+      // Resolve redgifs embeds to direct video URLs
+      session.posts = await resolvePosts(result.posts);
     }
     return { success: true, postCount: session.posts.length };
   } catch (e) {
-    console.error("[reddit-slideshow] scrapeAndStart error:", e);
     session = null;
     return { error: "Could not start slideshow. Make sure you're on a Reddit page." };
   }
 }
 
 async function handleGetCurrentState() {
-  console.log("[reddit-slideshow] getCurrentState called, session exists:", !!session, "posts:", session ? session.posts.length : 0);
   if (!session) {
     return { error: "No active session" };
   }
@@ -77,23 +119,21 @@ async function handleGetPosts(message) {
 
   const { startIndex, count } = message;
 
-  // If near the end, ask content script to scroll and scrape more
   if (startIndex + count >= session.posts.length - 5 && !session.loading && !session.exhausted) {
     session.loading = true;
     try {
       const result = await browser.tabs.sendMessage(session.tabId, { type: "loadMore" });
       if (result && result.posts) {
         const existingIds = new Set(session.posts.map((p) => p.id));
-        const newPosts = result.posts.filter((p) => !existingIds.has(p.id));
+        let newPosts = result.posts.filter((p) => !existingIds.has(p.id));
         if (newPosts.length === 0) {
-          // No new posts found after scrolling — likely exhausted
           session.exhausted = true;
         } else {
+          newPosts = await resolvePosts(newPosts);
           session.posts.push(...newPosts);
         }
       }
     } catch (e) {
-      // Content script may be gone — mark exhausted
       session.exhausted = true;
     } finally {
       session.loading = false;
