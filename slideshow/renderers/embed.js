@@ -1,6 +1,4 @@
 // Reddit Slideshow — embed renderer (iframes for third-party content)
-// Embeds don't auto-advance — we can't detect when cross-origin content finishes.
-// User must manually advance past embeds (arrow keys or click).
 
 const EmbedRenderer = {
   render(post, container, onEnded) {
@@ -31,10 +29,38 @@ const EmbedRenderer = {
 
     container.appendChild(iframe);
 
-    // No auto-advance for embeds — user must manually advance
-    // (we can't detect when cross-origin iframe content finishes)
+    let timer = null;
+    let messageHandler = null;
+
+    if (onEnded) {
+      // Listen for postMessage from embed iframes that signal video end
+      // Some players (like redgifs) post messages we can use
+      messageHandler = (event) => {
+        try {
+          const data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+          // YouTube iframe API sends {"event":"onStateChange","info":0} when video ends (0 = ended)
+          if (data.event === "onStateChange" && data.info === 0) {
+            onEnded();
+            return;
+          }
+          // Generic: look for "ended", "complete", "finished" signals
+          if (data.type === "ended" || data.type === "complete" || data.ended === true) {
+            onEnded();
+            return;
+          }
+        } catch (e) {
+          // Not JSON or not relevant — ignore
+        }
+      };
+      window.addEventListener("message", messageHandler);
+
+      // Fallback timer — if no end signal received, advance after 15s
+      timer = setTimeout(onEnded, 15000);
+    }
 
     return () => {
+      if (timer) clearTimeout(timer);
+      if (messageHandler) window.removeEventListener("message", messageHandler);
       iframe.src = "about:blank";
       container.innerHTML = "";
     };
