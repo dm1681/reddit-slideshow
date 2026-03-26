@@ -16,7 +16,7 @@ async function getRedgifsToken() {
   const resp = await fetch("https://api.redgifs.com/v2/auth/temporary");
   if (!resp.ok) return null;
   const data = await resp.json();
-  redgifsToken = data.token;
+  redgifsToken = data.token || data.access_token;
   redgifsTokenExpiry = Date.now() + (data.expires_in || 3600) * 1000 - 60000;
   return redgifsToken;
 }
@@ -42,9 +42,13 @@ async function resolvePost(post) {
   if (post.type === "embed" && post.originalUrl) {
     const match = post.originalUrl.match(/redgifs\.com\/(?:watch|ifr)\/(\w+)/i);
     if (match) {
-      const mp4Url = await resolveRedgifsUrl(match[1]);
-      if (mp4Url) {
-        return { ...post, type: "video", mediaUrl: mp4Url };
+      try {
+        const mp4Url = await resolveRedgifsUrl(match[1]);
+        if (mp4Url) {
+          return { ...post, type: "video", mediaUrl: mp4Url };
+        }
+      } catch (e) {
+        // API failed — keep as embed fallback
       }
     }
   }
@@ -92,12 +96,19 @@ async function handleStartSlideshow() {
 
   try {
     const result = await browser.tabs.sendMessage(tabs[0].id, { type: "scrapeAndStart" });
+    console.log("[reddit-slideshow] scrapeAndStart returned", result?.posts?.length, "posts");
     if (result && result.posts) {
-      // Resolve redgifs embeds to direct video URLs
-      session.posts = await resolvePosts(result.posts);
+      try {
+        session.posts = await resolvePosts(result.posts);
+        console.log("[reddit-slideshow] resolved posts:", session.posts.length, "types:", session.posts.map(p => p.type).join(","));
+      } catch (e) {
+        console.error("[reddit-slideshow] resolvePosts failed:", e);
+        session.posts = result.posts;
+      }
     }
     return { success: true, postCount: session.posts.length };
   } catch (e) {
+    console.error("[reddit-slideshow] scrapeAndStart error:", e);
     session = null;
     return { error: "Could not start slideshow. Make sure you're on a Reddit page." };
   }
