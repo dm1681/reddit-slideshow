@@ -206,9 +206,9 @@ browser.runtime.onMessage.addListener((message) => {
 
 async function handleScrapeAndStart() {
   const posts = scrapePosts();
-  await browser.runtime.sendMessage({ type: "postsScraped", posts });
   createOverlay();
-  return { success: true, postCount: posts.length };
+  // Return posts directly — background will store them from the response
+  return { success: true, posts };
 }
 
 async function handleLoadMore() {

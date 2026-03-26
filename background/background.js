@@ -10,8 +10,6 @@ browser.runtime.onMessage.addListener((message, sender) => {
   switch (message.type) {
     case "startSlideshow":
       return handleStartSlideshow();
-    case "postsScraped":
-      return handlePostsScraped(message);
     case "getCurrentState":
       return handleGetCurrentState();
     case "getPosts":
@@ -45,23 +43,15 @@ async function handleStartSlideshow() {
 
   try {
     const result = await browser.tabs.sendMessage(tabs[0].id, { type: "scrapeAndStart" });
+    // Content script returns scraped posts in the response
+    if (result && result.posts) {
+      session.posts = result.posts;
+    }
     return { success: true, postCount: session.posts.length };
   } catch (e) {
     session = null;
     return { error: "Could not start slideshow. Make sure you're on a Reddit page." };
   }
-}
-
-function handlePostsScraped(message) {
-  if (!session) return Promise.resolve({ error: "No active session" });
-
-  const { posts } = message;
-  // Deduplicate and append
-  const existingIds = new Set(session.posts.map((p) => p.id));
-  const newPosts = posts.filter((p) => !existingIds.has(p.id));
-  session.posts.push(...newPosts);
-
-  return Promise.resolve({ success: true, total: session.posts.length });
 }
 
 async function handleGetCurrentState() {
