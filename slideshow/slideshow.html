@@ -1,11 +1,40 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reddit Slideshow</title>
   <link rel="stylesheet" href="slideshow.css">
 </head>
 <body>
-  <div id="slideshow">Slideshow placeholder</div>
+  <!-- Top bar: progress, auto-advance, pop-out, close -->
+  <div id="top-bar" class="controls">
+    <span id="progress">0 / 0</span>
+    <div id="top-bar-right">
+      <button id="auto-advance-btn" title="Toggle auto-advance">⏱ Off</button>
+      <button id="popout-btn" title="Pop out to window">↗</button>
+      <button id="close-btn" title="Close slideshow">✕</button>
+    </div>
+  </div>
+
+  <!-- Navigation arrows -->
+  <button id="prev-btn" class="nav-arrow controls" title="Previous (←)">‹</button>
+  <button id="next-btn" class="nav-arrow controls" title="Next (→)">›</button>
+
+  <!-- Main content area — renderers populate this -->
+  <div id="content-container"></div>
+
+  <!-- Post info -->
+  <div id="post-info" class="controls">
+    <div id="post-title"></div>
+    <div id="post-meta"></div>
+  </div>
+
+  <!-- Progress bar -->
+  <div id="progress-bar">
+    <div id="progress-bar-fill"></div>
+  </div>
+
   <script src="renderers/image.js"></script>
   <script src="slideshow.js"></script>
 </body>
