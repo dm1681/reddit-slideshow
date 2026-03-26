@@ -95,10 +95,6 @@ function createSession(subreddit, sort) {
   return session;
 }
 
-function getSession() {
-  return session;
-}
-
 async function loadPosts(subreddit, sort) {
   const sess = createSession(subreddit, sort);
   sess.loading = true;
@@ -120,15 +116,23 @@ async function loadMorePosts() {
 
   session.loading = true;
   try {
-    const result = await fetchRedditPosts(session.subreddit, session.sort, session.afterToken);
-    // Deduplicate by post ID and filter to images (Phase 1)
-    const existingIds = new Set(session.posts.map((p) => p.id));
-    const newPosts = result.posts
-      .filter((p) => p.type === "image")
-      .filter((p) => !existingIds.has(p.id));
-    session.posts.push(...newPosts);
-    session.afterToken = result.after;
-    if (!result.after) session.exhausted = true;
+    // Keep fetching until we find image posts or exhaust the feed
+    let attempts = 0;
+    while (attempts < 5) {
+      const result = await fetchRedditPosts(session.subreddit, session.sort, session.afterToken);
+      const existingIds = new Set(session.posts.map((p) => p.id));
+      const newPosts = result.posts
+        .filter((p) => p.type === "image")
+        .filter((p) => !existingIds.has(p.id));
+      session.posts.push(...newPosts);
+      session.afterToken = result.after;
+      if (!result.after) {
+        session.exhausted = true;
+        break;
+      }
+      if (newPosts.length > 0) break;
+      attempts++;
+    }
   } finally {
     session.loading = false;
   }
@@ -155,6 +159,9 @@ browser.runtime.onMessage.addListener((message, sender) => {
 
 async function handleStartSlideshow(message, sender) {
   const { subreddit, sort } = message;
+  if (!subreddit || !/^[a-zA-Z0-9_]{1,21}$/.test(subreddit)) {
+    return { error: "Invalid subreddit name" };
+  }
   await loadPosts(subreddit, sort);
 
   // Filter to image-only for Phase 1

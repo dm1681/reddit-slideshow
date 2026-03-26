@@ -25,6 +25,7 @@
   let autoAdvanceInterval = 5000; // 5 seconds
   let autoAdvanceTimer = null;
   let exhausted = false;
+  let fetchInProgress = false;
 
   // --- Renderer map (extensible for future types) ---
   const renderers = {
@@ -36,7 +37,11 @@
     try {
       const state = await browser.runtime.sendMessage({ type: "getCurrentState" });
       if (state.error) {
-        contentContainer.innerHTML = `<div style="color:#777;font-size:14px;">${state.error}</div>`;
+        const errDiv = document.createElement("div");
+        errDiv.style.cssText = "color:#777;font-size:14px;";
+        errDiv.textContent = state.error;
+        contentContainer.innerHTML = "";
+        contentContainer.appendChild(errDiv);
         return;
       }
       posts = state.posts;
@@ -44,13 +49,21 @@
       exhausted = state.exhausted || false;
 
       if (posts.length === 0) {
-        contentContainer.innerHTML = `<div style="color:#777;font-size:14px;">No image posts found</div>`;
+        const noPostsDiv = document.createElement("div");
+        noPostsDiv.style.cssText = "color:#777;font-size:14px;";
+        noPostsDiv.textContent = "No image posts found";
+        contentContainer.innerHTML = "";
+        contentContainer.appendChild(noPostsDiv);
         return;
       }
 
       renderCurrentPost();
     } catch (e) {
-      contentContainer.innerHTML = `<div style="color:#777;font-size:14px;">Error loading slideshow</div>`;
+      const errDiv = document.createElement("div");
+      errDiv.style.cssText = "color:#777;font-size:14px;";
+      errDiv.textContent = "Error loading slideshow";
+      contentContainer.innerHTML = "";
+      contentContainer.appendChild(errDiv);
     }
   }
 
@@ -70,7 +83,11 @@
     if (renderer) {
       cleanupCurrentRender = renderer.render(post, contentContainer);
     } else {
-      contentContainer.innerHTML = `<div style="color:#777;font-size:14px;">Unsupported content type: ${post.type}</div>`;
+      const unsupportedDiv = document.createElement("div");
+      unsupportedDiv.style.cssText = "color:#777;font-size:14px;";
+      unsupportedDiv.textContent = `Unsupported content type: ${post.type}`;
+      contentContainer.innerHTML = "";
+      contentContainer.appendChild(unsupportedDiv);
     }
 
     // Update UI
@@ -116,7 +133,8 @@
 
   // --- Preemptive fetch ---
   async function checkPreemptiveFetch() {
-    if (currentIndex >= posts.length - 5 && !exhausted) {
+    if (currentIndex >= posts.length - 5 && !exhausted && !fetchInProgress) {
+      fetchInProgress = true;
       try {
         const result = await browser.runtime.sendMessage({
           type: "getPosts",
@@ -131,6 +149,8 @@
         }
       } catch (e) {
         // Non-critical — continue with what we have
+      } finally {
+        fetchInProgress = false;
       }
     }
   }

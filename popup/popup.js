@@ -82,5 +82,26 @@ subredditInput.addEventListener("input", () => {
   errorMsg.style.display = "none";
 });
 
+// --- Check for active session ---
+async function checkActiveSession() {
+  try {
+    const state = await browser.runtime.sendMessage({ type: "getCurrentState" });
+    if (state && !state.error) {
+      startBtn.textContent = "Stop Slideshow";
+      startBtn.classList.add("stop");
+      startBtn.onclick = async () => {
+        await browser.runtime.sendMessage({ type: "closeSlideshow" });
+        startBtn.textContent = "Start Slideshow";
+        startBtn.classList.remove("stop");
+        startBtn.onclick = null;
+        startBtn.addEventListener("click", startSlideshow);
+      };
+    }
+  } catch (e) {
+    // No active session
+  }
+}
+
 // --- Init ---
 detectSubreddit();
+checkActiveSession();

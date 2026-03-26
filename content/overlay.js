@@ -1,6 +1,7 @@
 // Reddit Slideshow — content script (overlay)
 
 let overlayElement = null;
+let savedOverflow = null;
 
 function createOverlay() {
   if (overlayElement) return; // Already showing
@@ -35,6 +36,7 @@ function createOverlay() {
   document.body.appendChild(overlayElement);
 
   // Prevent scrolling on the underlying page
+  savedOverflow = document.body.style.overflow;
   document.body.style.overflow = "hidden";
 }
 
@@ -43,7 +45,7 @@ function removeOverlay() {
 
   overlayElement.remove();
   overlayElement = null;
-  document.body.style.overflow = "";
+  document.body.style.overflow = savedOverflow;
 }
 
 // Listen for messages from background
