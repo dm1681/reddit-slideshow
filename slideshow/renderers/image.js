@@ -11,22 +11,35 @@ const ImageRenderer = {
     const img = document.createElement("img");
     img.alt = post.title;
     let timer = null;
+    let retries = 0;
+    const MAX_RETRIES = 2;
 
     img.addEventListener("load", () => {
       spinner.remove();
       img.classList.add("loaded");
-      // Images have no natural end — use a timer if auto-advance is on
       if (onEnded) {
         timer = setTimeout(onEnded, 5000);
       }
     });
 
     img.addEventListener("error", () => {
-      spinner.remove();
-      container.innerHTML = `<div style="color:#777;font-size:14px;">Failed to load image</div>`;
-      // Advance past broken images quickly
-      if (onEnded) {
-        timer = setTimeout(onEnded, 2000);
+      if (retries < MAX_RETRIES) {
+        retries++;
+        // Retry after a short delay
+        setTimeout(() => {
+          img.src = "";
+          img.src = post.mediaUrl;
+        }, 500 * retries);
+      } else {
+        spinner.remove();
+        const errDiv = document.createElement("div");
+        errDiv.style.cssText = "color:#777;font-size:14px;";
+        errDiv.textContent = "Failed to load image";
+        container.innerHTML = "";
+        container.appendChild(errDiv);
+        if (onEnded) {
+          timer = setTimeout(onEnded, 2000);
+        }
       }
     });
 

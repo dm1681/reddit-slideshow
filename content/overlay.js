@@ -89,22 +89,17 @@ function classifyPost(el) {
     return { type: "embed", mediaUrl: embedUrl, originalUrl: contentHref };
   }
 
-  // Gallery — grab first image from DOM
-  if (postType === "gallery") {
-    const img = el.querySelector(
-      'img[src*="i.redd.it"], img[src*="preview.redd.it"]'
-    );
-    if (img) {
-      return { type: "image", mediaUrl: img.src };
-    }
+  // Fallback: find best image in the post DOM
+  // Prefer i.redd.it (direct CDN, stable) over preview.redd.it (resized, has auth tokens)
+  const directImg = el.querySelector('img[src*="i.redd.it"]');
+  if (directImg) {
+    return { type: "image", mediaUrl: directImg.src };
   }
-
-  // Fallback: any redd.it/imgur image in the post
-  const img = el.querySelector(
-    'img[src*="i.redd.it"], img[src*="preview.redd.it"], img[src*="i.imgur.com"], img[src*="external-preview"]'
+  const previewImg = el.querySelector(
+    'img[src*="preview.redd.it"], img[src*="i.imgur.com"], img[src*="external-preview"]'
   );
-  if (img) {
-    return { type: "image", mediaUrl: img.src };
+  if (previewImg) {
+    return { type: "image", mediaUrl: previewImg.src };
   }
 
   return null;
