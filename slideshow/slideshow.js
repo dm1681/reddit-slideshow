@@ -1,0 +1,1 @@
+// Reddit Slideshow — slideshow controller
