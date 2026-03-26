@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Mock Reddit — r/pics</title>
+  <title>Mock Reddit — r/all</title>
   <style>
     body { font-family: sans-serif; background: #0b1416; color: #d7dadc; margin: 0; padding: 20px; }
     shreddit-post { display: block; border: 1px solid #343536; border-radius: 4px; margin: 8px 0; padding: 12px; background: #1a1a2e; }
@@ -12,149 +12,94 @@
   </style>
 </head>
 <body>
-  <h1>Mock Reddit — r/pics (New Reddit DOM)</h1>
+  <h1>Mock Reddit (mixed content types)</h1>
 
-  <!-- Post 1: post-type="image", content-href is direct image URL -->
-  <shreddit-post
-    id="t3_post001"
-    post-type="image"
-    post-title="Beautiful sunset over the mountains"
-    author="photographer42"
-    subreddit-prefixed-name="r/pics"
-    score="12453"
-    permalink="/r/pics/comments/abc001/beautiful_sunset/"
-    content-href="https://i.redd.it/sunset-mountains-01.jpg"
-  >
-    <div class="meta">Posted by u/photographer42 · 12.4k upvotes</div>
-    <h3>Beautiful sunset over the mountains</h3>
-    <img src="https://preview.redd.it/sunset-mountains-01.jpg?width=400" alt="Sunset">
+  <!-- Post 1: post-type="image" -->
+  <shreddit-post id="t3_post001" post-type="image"
+    post-title="Beautiful sunset" author="photographer42" subreddit-prefixed-name="r/pics"
+    score="12453" permalink="/r/pics/comments/abc001/beautiful_sunset/"
+    content-href="https://i.redd.it/sunset-01.jpg">
+    <img src="https://preview.redd.it/sunset-01.jpg?width=400" alt="Sunset">
   </shreddit-post>
 
-  <!-- Post 2: post-type="image", content-href is direct image (jpeg) -->
-  <shreddit-post
-    id="t3_post002"
-    post-type="image"
-    post-title="My cat being adorable"
-    author="catperson99"
-    subreddit-prefixed-name="r/pics"
-    score="8721"
-    permalink="/r/pics/comments/abc002/my_cat/"
-    content-href="https://i.redd.it/cat-adorable-02.jpeg"
-  >
-    <div class="meta">Posted by u/catperson99 · 8.7k upvotes</div>
-    <h3>My cat being adorable</h3>
-    <img src="https://preview.redd.it/cat-adorable-02.jpeg?width=400" alt="Cat">
+  <!-- Post 2: post-type="image" -->
+  <shreddit-post id="t3_post002" post-type="image"
+    post-title="Mountain view" author="hiker99" subreddit-prefixed-name="r/earthporn"
+    score="8721" permalink="/r/earthporn/comments/abc002/mountain_view/"
+    content-href="https://i.redd.it/mountain-02.jpeg">
+    <img src="https://preview.redd.it/mountain-02.jpeg?width=400" alt="Mountain">
   </shreddit-post>
 
-  <!-- Post 3: post-type="gallery", content-href is gallery URL — has images inside though -->
-  <shreddit-post
-    id="t3_post003"
-    post-type="gallery"
-    post-title="City skyline at night"
-    author="urbanphoto"
-    subreddit-prefixed-name="r/pics"
-    score="5432"
-    permalink="/r/pics/comments/abc003/city_skyline/"
-    content-href="https://www.reddit.com/gallery/abc003"
-  >
-    <div class="meta">Posted by u/urbanphoto · 5.4k upvotes</div>
-    <h3>City skyline at night</h3>
-    <img src="https://i.redd.it/city-skyline-03.png" alt="Skyline">
+  <!-- Post 3: post-type="link" with YouTube URL -->
+  <shreddit-post id="t3_post003" post-type="link"
+    post-title="Amazing drone footage" author="dronepilot" subreddit-prefixed-name="r/videos"
+    score="5432" permalink="/r/videos/comments/abc003/amazing_drone/"
+    content-href="https://www.youtube.com/watch?v=dQw4w9WgXcQ">
   </shreddit-post>
 
-  <!-- Post 4: post-type="text" — should be skipped (no image) -->
-  <shreddit-post
-    id="t3_post004"
-    post-type="text"
-    post-title="What's your favorite photography tip?"
-    author="shutterbug"
-    subreddit-prefixed-name="r/pics"
-    score="1234"
-    permalink="/r/pics/comments/abc004/whats_your_favorite/"
-    content-href="https://www.reddit.com/r/pics/comments/abc004/whats_your_favorite/"
-  >
-    <div class="meta">Posted by u/shutterbug · 1.2k upvotes</div>
-    <h3>What's your favorite photography tip?</h3>
-    <p>I'll start: always shoot during golden hour...</p>
+  <!-- Post 4: post-type="link" with youtu.be short URL -->
+  <shreddit-post id="t3_post004" post-type="link"
+    post-title="Short clip" author="clipmaker" subreddit-prefixed-name="r/videos"
+    score="3456" permalink="/r/videos/comments/abc004/short_clip/"
+    content-href="https://youtu.be/abc123def">
   </shreddit-post>
 
-  <!-- Post 5: post-type="link", content-href is external imgur image -->
-  <shreddit-post
-    id="t3_post005"
-    post-type="link"
-    post-title="Found this gem at the thrift store"
-    author="thriftfinder"
-    subreddit-prefixed-name="r/pics"
-    score="9876"
-    permalink="/r/pics/comments/abc005/found_this_gem/"
-    content-href="https://i.imgur.com/thrift-gem-05.jpg"
-  >
-    <div class="meta">Posted by u/thriftfinder · 9.8k upvotes</div>
-    <h3>Found this gem at the thrift store</h3>
-    <img src="https://i.imgur.com/thrift-gem-05.jpg" alt="Thrift find">
+  <!-- Post 5: post-type="link" with redgifs URL -->
+  <shreddit-post id="t3_post005" post-type="link"
+    post-title="Cute animal gif" author="animalfan" subreddit-prefixed-name="r/aww"
+    score="9876" permalink="/r/aww/comments/abc005/cute_animal/"
+    content-href="https://www.redgifs.com/watch/friendlylittlecat">
   </shreddit-post>
 
-  <!-- Post 6: post-type="image" -->
-  <shreddit-post
-    id="t3_post006"
-    post-type="image"
-    post-title="Northern lights from my backyard"
-    author="aurorahunter"
-    subreddit-prefixed-name="r/pics"
-    score="15678"
-    permalink="/r/pics/comments/abc006/northern_lights/"
-    content-href="https://i.redd.it/aurora-06.webp"
-  >
-    <div class="meta">Posted by u/aurorahunter · 15.6k upvotes</div>
-    <h3>Northern lights from my backyard</h3>
-    <img src="https://preview.redd.it/aurora-06.webp?width=400" alt="Aurora">
+  <!-- Post 6: post-type="text" — should be skipped -->
+  <shreddit-post id="t3_post006" post-type="text"
+    post-title="Discussion thread" author="poster" subreddit-prefixed-name="r/askreddit"
+    score="1234" permalink="/r/askreddit/comments/abc006/discussion/"
+    content-href="https://www.reddit.com/r/askreddit/comments/abc006/discussion/">
+    <p>What's your favorite movie?</p>
   </shreddit-post>
 
-  <!-- Post 7: post-type="link", content-href is video (should be skipped) -->
-  <shreddit-post
-    id="t3_post007"
-    post-type="link"
-    post-title="Watch this amazing drone footage"
-    author="dronepilot"
-    subreddit-prefixed-name="r/pics"
-    score="3456"
-    permalink="/r/pics/comments/abc007/drone_footage/"
-    content-href="https://redgifs.com/watch/somedrone"
-  >
-    <div class="meta">Posted by u/dronepilot · 3.4k upvotes</div>
-    <h3>Watch this amazing drone footage</h3>
+  <!-- Post 7: post-type="gallery" with redd.it images -->
+  <shreddit-post id="t3_post007" post-type="gallery"
+    post-title="Photo album" author="traveler" subreddit-prefixed-name="r/pics"
+    score="6543" permalink="/r/pics/comments/abc007/photo_album/"
+    content-href="https://www.reddit.com/gallery/abc007">
+    <img src="https://preview.redd.it/album-first-07.jpg?width=640" alt="Album first">
   </shreddit-post>
 
-  <!-- Simulate Reddit's infinite scroll — posts injected into DOM on scroll -->
+  <!-- Post 8: post-type="link" with imgur gifv -->
+  <shreddit-post id="t3_post008" post-type="link"
+    post-title="Funny reaction" author="memer" subreddit-prefixed-name="r/funny"
+    score="4321" permalink="/r/funny/comments/abc008/funny_reaction/"
+    content-href="https://i.imgur.com/reaction.gifv">
+  </shreddit-post>
+
+  <!-- Post 9: post-type="link" with unknown external site — should be skipped -->
+  <shreddit-post id="t3_post009" post-type="link"
+    post-title="News article" author="newsbot" subreddit-prefixed-name="r/news"
+    score="2345" permalink="/r/news/comments/abc009/news_article/"
+    content-href="https://www.cnn.com/2026/03/26/politics/some-article">
+  </shreddit-post>
+
+  <!-- Post 10: post-type="link" with direct jpg URL -->
+  <shreddit-post id="t3_post010" post-type="link"
+    post-title="Direct image link" author="linker" subreddit-prefixed-name="r/pics"
+    score="7890" permalink="/r/pics/comments/abc010/direct_link/"
+    content-href="https://i.imgur.com/directimage.jpg">
+    <img src="https://i.imgur.com/directimage.jpg" alt="Direct">
+  </shreddit-post>
+
+  <!-- Spacer to ensure page is scrollable -->
+  <div style="height: 2000px;"></div>
+
+  <!-- Infinite scroll simulation -->
   <script>
     const lazyPostsHTML = `
-    <shreddit-post
-      id="t3_post008"
-      post-type="image"
-      post-title="Misty morning in the forest"
-      author="naturelover"
-      subreddit-prefixed-name="r/pics"
-      score="7654"
-      permalink="/r/pics/comments/abc008/misty_morning/"
-      content-href="https://i.redd.it/misty-forest-08.jpg"
-    >
-      <div class="meta">Posted by u/naturelover · 7.6k upvotes</div>
-      <h3>Misty morning in the forest</h3>
-      <img src="https://preview.redd.it/misty-forest-08.jpg?width=400" alt="Forest">
-    </shreddit-post>
-    <shreddit-post
-      id="t3_post009"
-      post-type="image"
-      post-title="Rainbow over Niagara Falls"
-      author="traveller22"
-      subreddit-prefixed-name="r/pics"
-      score="11234"
-      permalink="/r/pics/comments/abc009/rainbow_niagara/"
-      content-href="https://i.redd.it/niagara-rainbow-09.png"
-    >
-      <div class="meta">Posted by u/traveller22 · 11.2k upvotes</div>
-      <h3>Rainbow over Niagara Falls</h3>
-      <img src="https://preview.redd.it/niagara-rainbow-09.png?width=400" alt="Niagara">
+    <shreddit-post id="t3_post011" post-type="image"
+      post-title="Lazy loaded image" author="scroller" subreddit-prefixed-name="r/pics"
+      score="5555" permalink="/r/pics/comments/abc011/lazy/"
+      content-href="https://i.redd.it/lazy-11.jpg">
+      <img src="https://preview.redd.it/lazy-11.jpg?width=400" alt="Lazy">
     </shreddit-post>`;
 
     let revealed = false;

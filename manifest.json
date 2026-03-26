@@ -12,7 +12,11 @@
     "tabs",
     "*://*.redd.it/*",
     "*://*.reddit.com/*",
-    "*://*.imgur.com/*"
+    "*://*.imgur.com/*",
+    "*://*.redgifs.com/*",
+    "*://*.youtube.com/*",
+    "*://*.gfycat.com/*",
+    "*://*.streamable.com/*"
   ],
   "browser_action": {
     "default_icon": "icons/icon-48.png",

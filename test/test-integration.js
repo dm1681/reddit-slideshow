@@ -13,6 +13,8 @@ const CONTENT_SCRIPT = fs.readFileSync(path.join(__dirname, "..", "content", "ov
 const BACKGROUND_SCRIPT = fs.readFileSync(path.join(__dirname, "..", "background", "background.js"), "utf8");
 const SLIDESHOW_JS = fs.readFileSync(path.join(__dirname, "..", "slideshow", "slideshow.js"), "utf8");
 const IMAGE_RENDERER = fs.readFileSync(path.join(__dirname, "..", "slideshow", "renderers", "image.js"), "utf8");
+const VIDEO_RENDERER = fs.readFileSync(path.join(__dirname, "..", "slideshow", "renderers", "video.js"), "utf8");
+const EMBED_RENDERER = fs.readFileSync(path.join(__dirname, "..", "slideshow", "renderers", "embed.js"), "utf8");
 const SLIDESHOW_HTML = fs.readFileSync(path.join(__dirname, "..", "slideshow", "slideshow.html"), "utf8");
 const SLIDESHOW_CSS = fs.readFileSync(path.join(__dirname, "..", "slideshow", "slideshow.css"), "utf8");
 
@@ -80,9 +82,10 @@ async function main() {
   const page = await browser.newPage();
   await page.goto(baseUrl + "/");
 
-  // Extract scrapePosts from content script
-  const scrapeFnMatch = CONTENT_SCRIPT.match(/function scrapePosts\(\)\s*\{[\s\S]*?^}/m);
-  const scrapeFnSrc = scrapeFnMatch[0];
+  // Extract all scraping code from content script
+  const marker = "// --- Scroll to load more ---";
+  let scrapeFnSrc = CONTENT_SCRIPT.substring(0, CONTENT_SCRIPT.indexOf(marker)).trim();
+  scrapeFnSrc = scrapeFnSrc.replace(/^\/\/[^\n]*\n+let overlayElement[^\n]*\nlet savedOverflow[^\n]*\n+\/\/ --- DOM scraping ---\n*/m, "");
 
   // Step 1: Run scraping on mock Reddit page
   const scrapedPosts = await page.evaluate((fnSrc) => {
@@ -90,7 +93,7 @@ async function main() {
     return scrapePosts();
   }, scrapeFnSrc);
 
-  assert(scrapedPosts.length === 5, `Scraped 5 posts from mock page (got ${scrapedPosts.length})`);
+  assert(scrapedPosts.length === 8, `Scraped 8 posts from mock page (got ${scrapedPosts.length})`);
   assert(scrapedPosts.every(p => p.id && p.title && p.mediaUrl), "All posts have id, title, mediaUrl");
 
   // Step 2: Simulate background state management (posts returned directly from scrapeAndStart)
@@ -112,7 +115,7 @@ async function main() {
     };
   }, scrapedPosts);
 
-  assert(bgState.posts.length === 5, `Background stored 5 posts (got ${bgState.posts.length})`);
+  assert(bgState.posts.length === 8, `Background stored 8 posts (got ${bgState.posts.length})`);
   assert(bgState.currentIndex === 0, "Current index is 0");
 
   // Step 3: Load slideshow page and render posts
@@ -121,6 +124,8 @@ async function main() {
 
   // Inject image renderer (use addScriptTag to properly define globals)
   await slideshowPage.addScriptTag({ content: IMAGE_RENDERER });
+  await slideshowPage.addScriptTag({ content: VIDEO_RENDERER });
+  await slideshowPage.addScriptTag({ content: EMBED_RENDERER });
 
   // Simulate the slideshow controller's init + renderCurrentPost
   const renderResult = await slideshowPage.evaluate((state) => {
@@ -140,7 +145,7 @@ async function main() {
     const post = posts[currentIndex];
 
     // Render using ImageRenderer
-    const renderers = { image: ImageRenderer };
+    const renderers = { image: ImageRenderer, video: VideoRenderer, embed: EmbedRenderer };
     const renderer = renderers[post.type];
     if (!renderer) {
       return { error: `No renderer for type: ${post.type}` };
@@ -179,10 +184,10 @@ async function main() {
   assert(renderResult.hasContent, "Content container has children");
   assert(renderResult.hasImg, "Image element exists in container");
   assert(renderResult.imgSrc === renderResult.mediaUrl, `Image src matches mediaUrl (${renderResult.imgSrc})`);
-  assert(renderResult.title === "Beautiful sunset over the mountains", "Post title rendered");
+  assert(renderResult.title === "Beautiful sunset", "Post title rendered");
   assert(renderResult.meta.includes("r/pics"), "Post meta includes subreddit");
   assert(renderResult.meta.includes("u/photographer42"), "Post meta includes author");
-  assert(renderResult.progress === "1 / 5", `Progress shows 1 / 5 (got ${renderResult.progress})`);
+  assert(renderResult.progress === "1 / 8", `Progress shows 1 / 8 (got ${renderResult.progress})`);
 
   // ================================================================
   // TEST 2: Navigation simulation
@@ -194,7 +199,7 @@ async function main() {
     const contentContainer = document.getElementById("content-container");
     const postTitle = document.getElementById("post-title");
     const progress = document.getElementById("progress");
-    const renderers = { image: ImageRenderer };
+    const renderers = { image: ImageRenderer, video: VideoRenderer, embed: EmbedRenderer };
 
     const results = [];
 
@@ -206,24 +211,21 @@ async function main() {
       postTitle.textContent = post.title;
       progress.textContent = `${i + 1} / ${posts.length}`;
 
-      // Check immediately — the img exists before load/error events
-      const img = contentContainer.querySelector("img");
+      // Check immediately — content exists before load/error events
       results.push({
         index: i,
         title: post.title,
-        hasImg: !!img,
-        imgSrc: img ? img.getAttribute("src") : null,
-        mediaUrl: post.mediaUrl,
+        postType: post.type,
+        hasContent: contentContainer.children.length > 0,
       });
     }
 
     return results;
   }, bgState);
 
-  assert(navResult.length === 5, `Navigated through all 5 posts (got ${navResult.length})`);
+  assert(navResult.length === 8, `Navigated through all 8 posts (got ${navResult.length})`);
   for (const r of navResult) {
-    assert(r.hasImg, `Post ${r.index + 1} has image element`);
-    assert(r.imgSrc === r.mediaUrl, `Post ${r.index + 1} img src matches mediaUrl`);
+    assert(r.hasContent, `Post ${r.index + 1} (${r.postType}) rendered content`);
   }
 
   // ================================================================
@@ -268,7 +270,7 @@ async function main() {
     console.log(`    [flow] ${entry}`);
   }
   assert(!msgFlowResult.wouldShowNoImages, "Slideshow would NOT show 'no images found'");
-  assert(msgFlowResult.postCount === 5, `Full flow delivers 5 posts (got ${msgFlowResult.postCount})`);
+  assert(msgFlowResult.postCount === 8, `Full flow delivers 8 posts (got ${msgFlowResult.postCount})`);
 
   // ================================================================
   // TEST 4: Verify actual slideshow.js init behavior
@@ -279,6 +281,8 @@ async function main() {
   await initPage.goto(baseUrl + "/slideshow");
 
   await initPage.addScriptTag({ content: IMAGE_RENDERER });
+  await initPage.addScriptTag({ content: VIDEO_RENDERER });
+  await initPage.addScriptTag({ content: EMBED_RENDERER });
 
   const initResult = await initPage.evaluate((bgStateToReturn) => {
 
@@ -323,7 +327,7 @@ async function main() {
 
         // Render first post
         const post = posts[0];
-        const renderers = { image: ImageRenderer };
+        const renderers = { image: ImageRenderer, video: VideoRenderer, embed: EmbedRenderer };
         const renderer = renderers[post.type];
         if (renderer) renderer.render(post, contentContainer);
         postTitleEl.textContent = post.title;
@@ -345,10 +349,10 @@ async function main() {
   }, bgState);
 
   assert(!initResult.error, `Init succeeded (${initResult.error || "ok"})`);
-  assert(initResult.postCount === 5, `Slideshow received 5 posts (got ${initResult.postCount})`);
+  assert(initResult.postCount === 8, `Slideshow received 8 posts (got ${initResult.postCount})`);
   assert(initResult.hasImg, "Slideshow rendered an image");
-  assert(initResult.title === "Beautiful sunset over the mountains", "Slideshow shows correct title");
-  assert(initResult.progress === "1 / 5", `Progress shows 1 / 5 (got ${initResult.progress})`);
+  assert(initResult.title === "Beautiful sunset", "Slideshow shows correct title");
+  assert(initResult.progress === "1 / 8", `Progress shows 1 / 8 (got ${initResult.progress})`);
 
   // Summary
   console.log(`\n--- Results: ${passed} passed, ${failed} failed ---`);

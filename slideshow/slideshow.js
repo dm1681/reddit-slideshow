@@ -27,9 +27,11 @@
   let exhausted = false;
   let fetchInProgress = false;
 
-  // --- Renderer map (extensible for future types) ---
+  // --- Renderer map ---
   const renderers = {
     image: ImageRenderer,
+    video: VideoRenderer,
+    embed: EmbedRenderer,
   };
 
   // --- Fetch initial state from background ---
@@ -51,7 +53,7 @@
       if (posts.length === 0) {
         const noPostsDiv = document.createElement("div");
         noPostsDiv.style.cssText = "color:#777;font-size:14px;";
-        noPostsDiv.textContent = "No image posts found";
+        noPostsDiv.textContent = "No posts found";
         contentContainer.innerHTML = "";
         contentContainer.appendChild(noPostsDiv);
         return;

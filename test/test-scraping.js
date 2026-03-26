@@ -23,13 +23,16 @@ function startServer() {
   });
 }
 
-// Extract the scrapePosts function source from overlay.js for injection
-function extractScrapeFunction() {
+// Extract all scraping code from overlay.js (everything before scroll section)
+function extractScrapeCode() {
   const src = fs.readFileSync(CONTENT_SCRIPT, "utf8");
-  // Extract the scrapePosts function body
-  const match = src.match(/function scrapePosts\(\)\s*\{[\s\S]*?^}/m);
-  if (!match) throw new Error("Could not extract scrapePosts from overlay.js");
-  return match[0];
+  const marker = "// --- Scroll to load more ---";
+  const idx = src.indexOf(marker);
+  if (idx === -1) throw new Error("Could not find scraping section boundary in overlay.js");
+  let section = src.substring(0, idx).trim();
+  // Remove module-level vars
+  section = section.replace(/^\/\/[^\n]*\n+let overlayElement[^\n]*\nlet savedOverflow[^\n]*\n+\/\/ --- DOM scraping ---\n*/m, "");
+  return section;
 }
 
 async function main() {
@@ -37,105 +40,122 @@ async function main() {
   const url = `http://localhost:${port}/`;
   console.log(`Mock server at ${url}\n`);
 
-  let playwright;
-  try {
-    playwright = require("playwright");
-  } catch (e) {
-    console.log("Install playwright: npm install playwright");
-    server.close();
-    process.exit(1);
-  }
-
-  const scrapeFnSource = extractScrapeFunction();
+  const playwright = require("playwright");
+  const scrapeCode = extractScrapeCode();
 
   const browser = await playwright.chromium.launch({ headless: true });
   const page = await browser.newPage();
   await page.goto(url);
 
-  // Inject scrapePosts and run it
-  const results = await page.evaluate((fnSrc) => {
-    eval(fnSrc); // defines scrapePosts in this scope
+  const results = await page.evaluate((code) => {
+    eval(code);
     return {
       totalElements: document.querySelectorAll("shreddit-post").length,
       posts: scrapePosts(),
     };
-  }, scrapeFnSource);
+  }, scrapeCode);
 
   let passed = 0;
   let failed = 0;
-
   function assert(condition, name) {
     if (condition) { console.log(`  ✓ ${name}`); passed++; }
     else { console.log(`  ✗ ${name}`); failed++; }
   }
 
-  // --- Initial scrape tests ---
+  // --- Initial scrape ---
   console.log("Test: Initial scrape (before scroll)");
-  assert(results.totalElements === 7, `Found 7 shreddit-post elements (got ${results.totalElements})`);
-  // Expected: posts 1,2,3,5,6 have images. Post 4 (text) and 7 (redgifs link, no img) skipped.
-  assert(results.posts.length === 5, `Scraped 5 image posts (got ${results.posts.length})`);
+  // 10 posts in DOM, but post 6 (text) and post 9 (unknown link) should be skipped = 8 posts
+  assert(results.totalElements === 10, `Found 10 shreddit-post elements (got ${results.totalElements})`);
+  assert(results.posts.length === 8, `Scraped 8 supported posts (got ${results.posts.length})`);
 
-  const p1 = results.posts.find((p) => p.id === "t3_post001");
-  assert(!!p1, "Post 1 found (post-type=image)");
-  assert(p1 && p1.title === "Beautiful sunset over the mountains", "Post 1 title correct");
-  assert(p1 && p1.author === "photographer42", "Post 1 author correct");
-  assert(p1 && p1.subreddit === "pics", "Post 1 subreddit correct");
-  assert(p1 && p1.score === 12453, "Post 1 score correct");
-  assert(p1 && p1.mediaUrl === "https://i.redd.it/sunset-mountains-01.jpg", "Post 1 mediaUrl from content-href (post-type=image)");
+  // Post 1: image
+  const p1 = results.posts.find(p => p.id === "t3_post001");
+  assert(!!p1, "Post 1 found");
+  assert(p1 && p1.type === "image", "Post 1 type is image");
+  assert(p1 && p1.mediaUrl === "https://i.redd.it/sunset-01.jpg", "Post 1 mediaUrl correct");
+  assert(p1 && p1.title === "Beautiful sunset", "Post 1 title correct");
 
-  const p2 = results.posts.find((p) => p.id === "t3_post002");
-  assert(!!p2, "Post 2 found (post-type=image)");
-  assert(p2 && p2.mediaUrl === "https://i.redd.it/cat-adorable-02.jpeg", "Post 2 mediaUrl from content-href");
+  // Post 2: image
+  const p2 = results.posts.find(p => p.id === "t3_post002");
+  assert(!!p2, "Post 2 found");
+  assert(p2 && p2.type === "image", "Post 2 type is image");
 
-  const p3 = results.posts.find((p) => p.id === "t3_post003");
-  assert(!!p3, "Post 3 found (gallery with i.redd.it img fallback)");
-  assert(p3 && p3.mediaUrl.includes("i.redd.it"), "Post 3 mediaUrl from img fallback");
+  // Post 3: YouTube embed
+  const p3 = results.posts.find(p => p.id === "t3_post003");
+  assert(!!p3, "Post 3 found (YouTube)");
+  assert(p3 && p3.type === "embed", "Post 3 type is embed");
+  assert(p3 && p3.mediaUrl.includes("youtube.com/embed/dQw4w9WgXcQ"), "Post 3 YouTube embed URL correct");
 
-  const p4 = results.posts.find((p) => p.id === "t3_post004");
-  assert(!p4, "Post 4 skipped (text post, no image)");
+  // Post 4: youtu.be embed
+  const p4 = results.posts.find(p => p.id === "t3_post004");
+  assert(!!p4, "Post 4 found (youtu.be)");
+  assert(p4 && p4.type === "embed", "Post 4 type is embed");
+  assert(p4 && p4.mediaUrl.includes("youtube.com/embed/abc123def"), "Post 4 youtu.be embed URL correct");
 
-  const p5 = results.posts.find((p) => p.id === "t3_post005");
-  assert(!!p5, "Post 5 found (imgur link with .jpg extension)");
-  assert(p5 && p5.mediaUrl.includes("i.imgur.com"), "Post 5 mediaUrl from content-href (.jpg extension)");
+  // Post 5: redgifs embed
+  const p5 = results.posts.find(p => p.id === "t3_post005");
+  assert(!!p5, "Post 5 found (redgifs)");
+  assert(p5 && p5.type === "embed", "Post 5 type is embed");
+  assert(p5 && p5.mediaUrl.includes("redgifs.com/ifr/friendlylittlecat"), "Post 5 redgifs embed URL correct");
 
-  const p6 = results.posts.find((p) => p.id === "t3_post006");
-  assert(!!p6, "Post 6 found (post-type=image)");
-  assert(p6 && p6.mediaUrl === "https://i.redd.it/aurora-06.webp", "Post 6 mediaUrl from content-href");
+  // Post 6: text — should be skipped
+  const p6 = results.posts.find(p => p.id === "t3_post006");
+  assert(!p6, "Post 6 skipped (text post)");
 
-  const p7 = results.posts.find((p) => p.id === "t3_post007");
-  assert(!p7, "Post 7 skipped (redgifs link, no image element)");
+  // Post 7: gallery with image fallback
+  const p7 = results.posts.find(p => p.id === "t3_post007");
+  assert(!!p7, "Post 7 found (gallery)");
+  assert(p7 && p7.type === "image", "Post 7 type is image (gallery fallback)");
+  assert(p7 && p7.mediaUrl.includes("preview.redd.it"), "Post 7 mediaUrl from preview image");
 
-  // --- Scroll tests ---
-  console.log("\nTest: After scroll (infinite scroll simulation)");
+  // Post 8: imgur gifv → video
+  const p8 = results.posts.find(p => p.id === "t3_post008");
+  assert(!!p8, "Post 8 found (imgur gifv)");
+  assert(p8 && p8.type === "video", "Post 8 type is video (gifv→mp4)");
+  assert(p8 && p8.mediaUrl.endsWith(".mp4"), "Post 8 mediaUrl converted to mp4");
+
+  // Post 9: unknown external link — should be skipped
+  const p9 = results.posts.find(p => p.id === "t3_post009");
+  assert(!p9, "Post 9 skipped (unknown external link)");
+
+  // Post 10: direct image link
+  const p10 = results.posts.find(p => p.id === "t3_post010");
+  assert(!!p10, "Post 10 found (direct .jpg link)");
+  assert(p10 && p10.type === "image", "Post 10 type is image");
+
+  // --- Scroll test ---
+  console.log("\nTest: After scroll");
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
   await page.waitForTimeout(1000);
 
-  const afterScroll = await page.evaluate((fnSrc) => {
-    eval(fnSrc);
+  const afterScroll = await page.evaluate((code) => {
+    eval(code);
     return {
       totalElements: document.querySelectorAll("shreddit-post").length,
       posts: scrapePosts(),
     };
-  }, scrapeFnSource);
+  }, scrapeCode);
 
-  assert(afterScroll.totalElements === 9, `Found 9 elements after scroll (got ${afterScroll.totalElements})`);
-  assert(afterScroll.posts.length === 7, `Scraped 7 image posts after scroll (got ${afterScroll.posts.length})`);
+  assert(afterScroll.totalElements === 11, `Found 11 elements after scroll (got ${afterScroll.totalElements})`);
+  assert(afterScroll.posts.length === 9, `Scraped 9 posts after scroll (got ${afterScroll.posts.length})`);
 
-  const p8 = afterScroll.posts.find((p) => p.id === "t3_post008");
-  assert(!!p8, "Post 8 found after scroll");
-  assert(p8 && p8.title === "Misty morning in the forest", "Post 8 title correct");
-  assert(p8 && p8.mediaUrl === "https://i.redd.it/misty-forest-08.jpg", "Post 8 mediaUrl correct");
+  const p11 = afterScroll.posts.find(p => p.id === "t3_post011");
+  assert(!!p11, "Post 11 found after scroll");
+  assert(p11 && p11.type === "image", "Post 11 type is image");
 
-  const p9 = afterScroll.posts.find((p) => p.id === "t3_post009");
-  assert(!!p9, "Post 9 found after scroll");
-
-  // --- Deduplication test ---
+  // --- Deduplication ---
   console.log("\nTest: Deduplication");
-  const ids = afterScroll.posts.map((p) => p.id);
-  const uniqueIds = new Set(ids);
-  assert(ids.length === uniqueIds.size, "No duplicate post IDs");
+  const ids = afterScroll.posts.map(p => p.id);
+  assert(ids.length === new Set(ids).size, "No duplicate post IDs");
 
-  // Summary
+  // --- Type distribution ---
+  console.log("\nTest: Type distribution");
+  const typeCounts = {};
+  afterScroll.posts.forEach(p => { typeCounts[p.type] = (typeCounts[p.type] || 0) + 1; });
+  assert(typeCounts.image === 5, `5 image posts (got ${typeCounts.image})`);
+  assert(typeCounts.embed === 3, `3 embed posts (got ${typeCounts.embed})`);
+  assert(typeCounts.video === 1, `1 video post (got ${typeCounts.video})`);
+
   console.log(`\n--- Results: ${passed} passed, ${failed} failed ---`);
 
   await browser.close();

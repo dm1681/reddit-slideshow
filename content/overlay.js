@@ -5,6 +5,111 @@ let savedOverflow = null;
 
 // --- DOM scraping ---
 
+// Known embed hosts and their embed URL patterns
+const EMBED_HOSTS = {
+  "redgifs.com": (url) => {
+    const match = url.match(/redgifs\.com\/(?:watch|ifr)\/(\w+)/);
+    return match ? `https://www.redgifs.com/ifr/${match[1]}` : null;
+  },
+  "youtube.com": (url) => {
+    const match = url.match(/[?&]v=([\w-]+)/);
+    return match ? `https://www.youtube.com/embed/${match[1]}?autoplay=1` : null;
+  },
+  "youtu.be": (url) => {
+    const match = url.match(/youtu\.be\/([\w-]+)/);
+    return match ? `https://www.youtube.com/embed/${match[1]}?autoplay=1` : null;
+  },
+  "gfycat.com": (url) => {
+    const match = url.match(/gfycat\.com\/(\w+)/);
+    return match ? `https://gfycat.com/ifr/${match[1]}` : null;
+  },
+  "streamable.com": (url) => {
+    const match = url.match(/streamable\.com\/(\w+)/);
+    return match ? `https://streamable.com/e/${match[1]}` : null;
+  },
+  "imgur.com": (url) => {
+    // Imgur gifv or video
+    if (/\.(gifv|mp4)$/i.test(url)) {
+      return url.replace(/\.gifv$/i, ".mp4");
+    }
+    return null;
+  },
+};
+
+function getEmbedUrl(contentHref) {
+  try {
+    const urlObj = new URL(contentHref);
+    const hostname = urlObj.hostname.replace(/^www\./, "");
+    for (const [host, transformer] of Object.entries(EMBED_HOSTS)) {
+      if (hostname === host || hostname.endsWith("." + host)) {
+        return transformer(contentHref);
+      }
+    }
+  } catch (e) {
+    // Invalid URL
+  }
+  return null;
+}
+
+function classifyPost(el) {
+  const postType = el.getAttribute("post-type") || "";
+  const contentHref = el.getAttribute("content-href") || "";
+
+  // Image posts
+  if (postType === "image" && contentHref) {
+    return { type: "image", mediaUrl: contentHref };
+  }
+
+  // Check content-href for direct image URLs
+  if (/\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i.test(contentHref)) {
+    return { type: "image", mediaUrl: contentHref };
+  }
+
+  // Reddit-hosted video
+  if (postType === "video" || /v\.redd\.it/.test(contentHref)) {
+    // Try to find video source in the DOM
+    const video = el.querySelector("video source, video[src]");
+    const videoSrc = video ? (video.getAttribute("src") || video.src) : null;
+    if (videoSrc) {
+      return { type: "video", mediaUrl: videoSrc };
+    }
+    // Fallback: construct HLS URL from v.redd.it link
+    if (contentHref.includes("v.redd.it")) {
+      return { type: "video", mediaUrl: contentHref + "/DASH_720.mp4" };
+    }
+  }
+
+  // Check for embeddable links (redgifs, youtube, etc.)
+  const embedUrl = getEmbedUrl(contentHref);
+  if (embedUrl) {
+    // Special case: imgur mp4 is a direct video
+    if (embedUrl.endsWith(".mp4")) {
+      return { type: "video", mediaUrl: embedUrl };
+    }
+    return { type: "embed", mediaUrl: embedUrl, originalUrl: contentHref };
+  }
+
+  // Gallery — grab first image from DOM
+  if (postType === "gallery") {
+    const img = el.querySelector(
+      'img[src*="i.redd.it"], img[src*="preview.redd.it"]'
+    );
+    if (img) {
+      return { type: "image", mediaUrl: img.src };
+    }
+  }
+
+  // Fallback: any redd.it/imgur image in the post
+  const img = el.querySelector(
+    'img[src*="i.redd.it"], img[src*="preview.redd.it"], img[src*="i.imgur.com"], img[src*="external-preview"]'
+  );
+  if (img) {
+    return { type: "image", mediaUrl: img.src };
+  }
+
+  return null;
+}
+
 function scrapePosts() {
   const posts = [];
   const seen = new Set();
@@ -15,70 +120,46 @@ function scrapePosts() {
     if (!id || seen.has(id)) return;
     seen.add(id);
 
-    const title = el.getAttribute("post-title") || "";
-    const author = el.getAttribute("author") || "";
-    const subreddit = (el.getAttribute("subreddit-prefixed-name") || "").replace(/^r\//, "");
-    const score = parseInt(el.getAttribute("score") || "0", 10);
-    const permalink = el.getAttribute("permalink") || "";
-    const contentHref = el.getAttribute("content-href") || "";
-    const postType = el.getAttribute("post-type") || "";
+    const classified = classifyPost(el);
+    if (!classified) return;
 
-    // Determine image URL based on post-type attribute and content
-    let mediaUrl = null;
-
-    // post-type="image" — content-href is the direct image URL
-    if (postType === "image" && contentHref) {
-      mediaUrl = contentHref;
-    }
-
-    // Fallback: check content-href for image extensions
-    if (!mediaUrl && /\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i.test(contentHref)) {
-      mediaUrl = contentHref;
-    }
-
-    // Fallback: look for preview/full images inside the post element
-    if (!mediaUrl) {
-      const img = el.querySelector(
-        'img[src*="i.redd.it"], img[src*="preview.redd.it"], img[src*="i.imgur.com"], img[src*="external-preview"]'
-      );
-      if (img) {
-        mediaUrl = img.src;
-      }
-    }
-
-    if (mediaUrl) {
-      posts.push({
-        id,
-        title,
-        author,
-        subreddit,
-        score,
-        permalink,
-        type: "image",
-        mediaUrl,
-        url: contentHref,
-      });
-    }
+    posts.push({
+      id,
+      title: el.getAttribute("post-title") || "",
+      author: el.getAttribute("author") || "",
+      subreddit: (el.getAttribute("subreddit-prefixed-name") || "").replace(/^r\//, ""),
+      score: parseInt(el.getAttribute("score") || "0", 10),
+      permalink: el.getAttribute("permalink") || "",
+      type: classified.type,
+      mediaUrl: classified.mediaUrl,
+      originalUrl: classified.originalUrl || el.getAttribute("content-href") || "",
+    });
   });
 
-  // Old Reddit: .thing elements
+  // Old Reddit fallback
   if (posts.length === 0) {
     document.querySelectorAll('.thing[data-type="link"]').forEach((el) => {
       const id = el.getAttribute("data-fullname") || "";
       if (!id || seen.has(id)) return;
       seen.add(id);
 
-      const title = (el.querySelector("a.title") || {}).textContent || "";
-      const author = el.getAttribute("data-author") || "";
-      const subreddit = el.getAttribute("data-subreddit") || "";
-      const score = parseInt(el.getAttribute("data-score") || "0", 10);
-      const permalink = (el.querySelector("a.comments") || {}).getAttribute("href") || "";
       const dataUrl = el.getAttribute("data-url") || "";
-
+      let type = "image";
       let mediaUrl = null;
+
       if (/\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i.test(dataUrl)) {
         mediaUrl = dataUrl;
+      } else if (/\.(mp4|gifv)(\?.*)?$/i.test(dataUrl)) {
+        type = "video";
+        mediaUrl = dataUrl.replace(/\.gifv$/i, ".mp4");
+      } else {
+        const embedUrl = getEmbedUrl(dataUrl);
+        if (embedUrl) {
+          type = embedUrl.endsWith(".mp4") ? "video" : "embed";
+          mediaUrl = embedUrl;
+        }
       }
+
       if (!mediaUrl) {
         const img = el.querySelector(
           'img[src*="i.redd.it"], img[src*="preview.redd.it"], img[src*="i.imgur.com"]'
@@ -91,14 +172,14 @@ function scrapePosts() {
       if (mediaUrl) {
         posts.push({
           id,
-          title,
-          author,
-          subreddit,
-          score,
-          permalink,
-          type: "image",
+          title: (el.querySelector("a.title") || {}).textContent || "",
+          author: el.getAttribute("data-author") || "",
+          subreddit: el.getAttribute("data-subreddit") || "",
+          score: parseInt(el.getAttribute("data-score") || "0", 10),
+          permalink: (el.querySelector("a.comments") || {}).getAttribute("href") || "",
+          type,
           mediaUrl,
-          url: dataUrl,
+          originalUrl: dataUrl,
         });
       }
     });
@@ -110,7 +191,6 @@ function scrapePosts() {
 // --- Scroll to load more ---
 
 async function scrollAndScrape() {
-  // Temporarily allow scrolling if overlay is up
   const currentOverflow = document.body.style.overflow;
   document.body.style.overflow = "auto";
 
@@ -118,10 +198,8 @@ async function scrollAndScrape() {
     "shreddit-post, .thing[data-type='link']"
   ).length;
 
-  // Scroll to bottom to trigger Reddit's infinite scroll
   window.scrollTo(0, document.body.scrollHeight);
 
-  // Wait for new content to appear (up to 5 seconds)
   const posts = await new Promise((resolve) => {
     let attempts = 0;
     const check = setInterval(() => {
@@ -136,9 +214,7 @@ async function scrollAndScrape() {
     }, 500);
   });
 
-  // Restore overflow
   document.body.style.overflow = currentOverflow;
-
   return posts;
 }
 
@@ -207,7 +283,6 @@ browser.runtime.onMessage.addListener((message) => {
 async function handleScrapeAndStart() {
   const posts = scrapePosts();
   createOverlay();
-  // Return posts directly — background will store them from the response
   return { success: true, posts };
 }
 

@@ -42,19 +42,26 @@ async function handleStartSlideshow() {
   session.tabId = tabs[0].id;
 
   try {
+    console.log("[reddit-slideshow] sending scrapeAndStart to tab", tabs[0].id);
     const result = await browser.tabs.sendMessage(tabs[0].id, { type: "scrapeAndStart" });
+    console.log("[reddit-slideshow] scrapeAndStart response:", JSON.stringify(result).substring(0, 200));
     // Content script returns scraped posts in the response
     if (result && result.posts) {
       session.posts = result.posts;
+      console.log("[reddit-slideshow] stored", session.posts.length, "posts in session");
+    } else {
+      console.log("[reddit-slideshow] NO posts in response. result:", result);
     }
     return { success: true, postCount: session.posts.length };
   } catch (e) {
+    console.error("[reddit-slideshow] scrapeAndStart error:", e);
     session = null;
     return { error: "Could not start slideshow. Make sure you're on a Reddit page." };
   }
 }
 
 async function handleGetCurrentState() {
+  console.log("[reddit-slideshow] getCurrentState called, session exists:", !!session, "posts:", session ? session.posts.length : 0);
   if (!session) {
     return { error: "No active session" };
   }
