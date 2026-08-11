@@ -1,0 +1,12 @@
+{
+  "categories": ["photos-music-videos", "social-communication"],
+  "summary": {
+    "en-US": "Turn any Reddit listing into a fullscreen slideshow. Plays images, videos, galleries and embeds one at a time, with keyboard navigation and auto-advance."
+  },
+  "description": {
+    "en-US": "Reddit Slideshow turns the Reddit page you are already looking at into a fullscreen slideshow.\n\nOpen any subreddit, multireddit, or feed, click the toolbar button, and the posts play one at a time — images, Reddit-hosted video, galleries, and embedded video — with keyboard navigation and auto-advance. Videos advance when they finish playing rather than on a fixed timer, so nothing gets cut off half way.\n\nFeatures:\n\n• Works on any listing — subreddits, multireddits, home feed, search results\n• Handles images, v.redd.it video, galleries, and embeds\n• Keyboard navigation, auto-advance, and idle-fading controls\n• Auto-advance is event driven: videos advance when they end\n\nPrivacy: the extension reads the posts from the page you have open and does not call the Reddit API, does not require an account, and does not collect, store, or transmit any personal data."
+  },
+  "version": {
+    "license": "ISC"
+  }
+}

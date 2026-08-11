@@ -19,6 +19,7 @@ module.exports = {
     "package.json",
     "package-lock.json",
     "web-ext-config.cjs",
+    "amo-metadata.json",
     "updates.json",
     "CLAUDE.md",
     "README.md",

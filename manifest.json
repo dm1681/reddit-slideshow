@@ -1,14 +1,16 @@
 {
   "manifest_version": 2,
   "name": "Reddit Slideshow",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "View Reddit posts in a fullscreen slideshow",
   "browser_specific_settings": {
     "gecko": {
       "id": "reddit-slideshow@dm1681.github.io",
       "strict_min_version": "140.0",
       "data_collection_permissions": {
-        "required": ["none"]
+        "required": [
+          "none"
+        ]
       }
     }
   },
@@ -33,12 +35,18 @@
     "default_popup": "popup/popup.html"
   },
   "background": {
-    "scripts": ["background/background.js"]
+    "scripts": [
+      "background/background.js"
+    ]
   },
   "content_scripts": [
     {
-      "matches": ["*://*.reddit.com/*"],
-      "js": ["content/overlay.js"],
+      "matches": [
+        "*://*.reddit.com/*"
+      ],
+      "js": [
+        "content/overlay.js"
+      ],
       "run_at": "document_idle"
     }
   ],

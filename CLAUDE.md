@@ -30,9 +30,14 @@ Permanent installs must be signed by Mozilla — see README.md.
 Click "Reload" on the extension card in `about:debugging`, or press Ctrl+R in the extension's pages.
 
 ### Distribution
-Distributed as an **unlisted** AMO-signed add-on; releases are cut by tagging
+Published on AMO in the **listed** (public) channel; releases are cut by tagging
 (`npm run bump patch` → tag → push), which triggers `.github/workflows/release.yml`.
 See README.md for the full release and install procedure.
+
+A version's AMO channel is fixed permanently at submission and version numbers
+are unique across channels — v0.1.0 is unlisted, v0.1.1 onwards are listed.
+Never add `update_url` to the manifest: AMO rejects it on listed submissions,
+and Firefox already updates listed add-ons natively.
 
 Note `manifest.json` is the version source of truth and carries a stable
 `browser_specific_settings.gecko.id`. Never change that ID — Firefox treats a

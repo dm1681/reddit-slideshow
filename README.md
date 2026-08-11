@@ -5,42 +5,35 @@ It scrapes posts from the page you are already looking at — no Reddit API call
 no account, no auth — and plays images, videos, galleries and embeds one at a
 time with keyboard navigation and auto-advance.
 
-## Installing on another machine
+## Installing
 
-Firefox refuses to permanently install an extension that Mozilla has not signed.
-This is not configurable on the release or beta channels: the
-`xpinstall.signatures.required` pref only has an effect on Developer Edition,
-Nightly and ESR. `about:debugging` → *Load Temporary Add-on* works, but the
-add-on is removed on every browser restart.
-
-So the extension is distributed as an **unlisted** add-on: Mozilla signs the
-package but never lists it publicly, and the signed `.xpi` is attached to a
-GitHub Release here.
-
-### Install
-
-1. Open the [latest release](../../releases/latest) and download
-   `reddit-slideshow-<version>.xpi`.
-2. In Firefox, open `about:addons`.
-3. Click the gear icon → **Install Add-on From File…** and pick the `.xpi`.
-
-Dragging the `.xpi` onto a Firefox window also works.
+The extension is published on addons.mozilla.org. Install it from its AMO
+listing like any other Firefox extension — Firefox handles installation and
+updates natively, on every machine, with nothing to configure.
 
 Requires **Firefox 140 or newer** (the current ESR line). Older builds will
 refuse to install it rather than installing something that half-works.
 
-> This repository is private, so GitHub release downloads require you to be
-> signed in. Step 1 must happen in a logged-in browser; a bare `curl` of the
-> asset URL returns a 404.
+This source repository is private; only the built extension is public.
 
-### Automatic updates
+### Why signing is unavoidable
 
-Firefox polls an add-on's `update_url` anonymously, with no auth header, so a
-private repository cannot serve updates — the request 404s. Auto-update
-therefore needs the two small update files on a public host, while this
-source repository stays private. See [Enabling auto-update](#enabling-auto-update)
-below. Until that is set up, updating means downloading the new `.xpi` and
-installing it over the old one, which Firefox handles in place.
+Firefox refuses to permanently install an extension that Mozilla has not
+signed, and this is not configurable on the release or beta channels — the
+`xpinstall.signatures.required` pref only has an effect on Developer Edition,
+Nightly and ESR. `about:debugging` → *Load Temporary Add-on* works for
+development, but the add-on is removed on every browser restart.
+
+### A note on v0.1.0
+
+v0.1.0 was published to the **unlisted** channel and is attached to its GitHub
+Release. A version's channel is fixed permanently at submission, so it could
+not be converted — v0.1.1 was published to the listed channel instead. Because
+the add-on ID is unchanged, an existing v0.1.0 install updates in place from
+AMO rather than appearing twice.
+
+Version numbers are unique across both channels, so a number burned on one
+channel cannot be reused on the other.
 
 ## Releasing a new version
 
@@ -52,11 +45,24 @@ git push --follow-tags
 ```
 
 The tag triggers `.github/workflows/release.yml`, which runs the tests, lints
-against AMO's validator, submits to AMO for signing, and publishes the signed
-`.xpi` plus `updates.json` as a GitHub Release.
+against AMO's validator, publishes to the AMO **listed** channel, and attaches
+the signed `.xpi` to a GitHub Release as a convenience copy.
 
 `npm run bump` refuses to move the version backwards, because AMO will not
 re-sign a version number it has already issued.
+
+`amo-metadata.json` holds the AMO listing fields — categories, summary,
+description, and licence. AMO requires them on a first listed submission, and
+passing the file on every release keeps the published listing in step with the
+repo. Category slugs and licence slugs are validated by AMO and are not free
+text; the valid sets come from
+[the categories API](https://addons.mozilla.org/api/v5/addons/categories/) and
+[the licence list](https://mozilla.github.io/addons-server/topics/api/licenses.html).
+
+If AMO approval outruns the workflow's 30-minute wait, `web-ext` gives up
+*after* the submission has already gone through. The release still publishes;
+only the GitHub copy of the `.xpi` is skipped. Never retry by re-tagging the
+same version — AMO will reject it as already submitted. Bump instead.
 
 ### One-time setup: AMO API credentials
 
@@ -84,36 +90,17 @@ export AMO_JWT_SECRET='...'
 npm run sign
 ```
 
-The signed `.xpi` lands in `web-ext-artifacts/`. Unlisted submissions go
-through automated review, which usually completes in a few minutes.
+This publishes for real — `--channel listed` makes the version public. The
+signed `.xpi` lands in `web-ext-artifacts/`.
 
-## Enabling auto-update
+## Updates
 
-Auto-update needs `updates.json` and the `.xpi` files reachable without
-authentication. The usual arrangement is a second, **public** repository that
-holds only releases, leaving this source repo private:
+Firefox updates listed add-ons from AMO natively. There is nothing to host and
+no `update_url` in the manifest — AMO would reject one on a listed submission.
 
-1. Create a public repo, e.g. `reddit-slideshow-releases`.
-2. Point the release job at it by setting a repository variable:
-   ```sh
-   gh variable set UPDATE_BASE_URL \
-     --body "https://github.com/dm1681/reddit-slideshow-releases/releases/download"
-   ```
-   and change the `Publish release` step to target that repo (`gh release
-   create --repo dm1681/reddit-slideshow-releases`).
-3. Add the matching `update_url` to `manifest.json`:
-   ```json
-   "browser_specific_settings": {
-     "gecko": {
-       "id": "reddit-slideshow@dm1681.github.io",
-       "update_url": "https://github.com/dm1681/reddit-slideshow-releases/releases/latest/download/updates.json"
-     }
-   }
-   ```
-
-The `update_url` is baked into the installed add-on, so it only takes effect
-from the first build that carries it — install that build manually once, and
-every later version arrives on its own.
+`scripts/make-update-manifest.js` generates an `updates.json` for the
+self-hosted case. It is unused while the add-on is listed, and kept only so
+that switching back to self-distribution does not mean rebuilding it.
 
 ## Development
 

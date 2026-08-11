@@ -47,7 +47,15 @@ jobs:
           fi
           echo "version=$MANIFEST_VERSION" >> "$GITHUB_ENV"
 
-      - name: Sign with AMO (unlisted)
+      # Publishes to the public AMO listing. amo-metadata.json supplies the
+      # listing fields (categories, summary, description, license) that AMO
+      # requires; without it a first listed submission is rejected.
+      #
+      # The default 15-minute approval wait is not always enough for a listed
+      # version, and web-ext throws on timeout — after the submission has
+      # already succeeded. Allowing 30 minutes makes that far less likely, and
+      # the steps below treat a missing XPI as non-fatal for the same reason.
+      - name: Sign and publish to AMO (listed)
         env:
           AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
           AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
@@ -59,38 +67,39 @@ jobs:
           fi
           npx web-ext sign \
             --source-dir . \
-            --channel unlisted \
+            --channel listed \
+            --amo-metadata amo-metadata.json \
+            --approval-timeout 1800000 \
             --api-key "$AMO_JWT_ISSUER" \
             --api-secret "$AMO_JWT_SECRET"
 
-      # web-ext derives its own artifact filename; normalise it so the
-      # update_link in updates.json is stable and predictable.
-      - name: Normalise artifact name
+      # AMO hosts the listed add-on, so the XPI here is a convenience copy for
+      # the GitHub release, not the delivery mechanism. Its absence must not
+      # fail a release that AMO has already accepted.
+      - name: Collect signed artifact
         run: |
           SIGNED=$(find web-ext-artifacts -name '*.xpi' | head -1)
           if [ -z "$SIGNED" ]; then
-            echo "AMO signing produced no .xpi — refusing to publish an unsigned release."
-            exit 1
+            echo "No signed XPI downloaded — AMO approval likely outran the wait."
+            echo "The listed version is still submitted; check the AMO Developer Hub."
+            echo "xpi=" >> "$GITHUB_ENV"
+            exit 0
           fi
           TARGET="web-ext-artifacts/reddit-slideshow-${version}.xpi"
           if [ "$SIGNED" != "$TARGET" ]; then
             mv "$SIGNED" "$TARGET"
           fi
           ls -la "$TARGET"
+          echo "xpi=$TARGET" >> "$GITHUB_ENV"
 
-      - name: Generate update manifest
-        run: |
-          node scripts/make-update-manifest.js \
-            "${UPDATE_BASE_URL:-https://github.com/${GITHUB_REPOSITORY}/releases/download}"
-        env:
-          UPDATE_BASE_URL: ${{ vars.UPDATE_BASE_URL }}
-
+      # No updates.json: Firefox updates listed add-ons from AMO natively, so a
+      # self-hosted update manifest would be dead weight pointing nowhere.
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
-            --title "v${version}" \
-            --generate-notes \
-            "web-ext-artifacts/reddit-slideshow-${version}.xpi" \
-            "updates.json"
+          if [ -n "$xpi" ]; then
+            gh release create "$GITHUB_REF_NAME" --title "v${version}" --generate-notes "$xpi"
+          else
+            gh release create "$GITHUB_REF_NAME" --title "v${version}" --generate-notes
+          fi
