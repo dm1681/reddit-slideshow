@@ -3,10 +3,11 @@ name: Release
 # Tagging is the release trigger: `npm run bump patch` then push the tag.
 # The job signs the add-on through AMO and attaches the signed XPI to a
 # GitHub Release, which is what the other machines install from.
+# Tags only. A manual dispatch has no tag to derive a version from, and every
+# step below keys off one, so there is no meaningful non-tag release.
 on:
   push:
     tags: ["v*"]
-  workflow_dispatch:
 
 permissions:
   contents: write
@@ -15,9 +16,9 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: "22"
           cache: npm
@@ -71,7 +72,11 @@ jobs:
             echo "AMO signing produced no .xpi — refusing to publish an unsigned release."
             exit 1
           fi
-          mv "$SIGNED" "web-ext-artifacts/reddit-slideshow-${version}.xpi"
+          TARGET="web-ext-artifacts/reddit-slideshow-${version}.xpi"
+          if [ "$SIGNED" != "$TARGET" ]; then
+            mv "$SIGNED" "$TARGET"
+          fi
+          ls -la "$TARGET"
 
       - name: Generate update manifest
         run: |
