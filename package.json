@@ -7,7 +7,7 @@
     "test": "test"
   },
   "scripts": {
-    "test": "node test/test-scraping.js && node test/test-integration.js"
+    "test": "node test/test-scraping.js && node test/test-integration.js && node test/test-start-race.js && node test/test-vreddit.js"
   },
   "keywords": [],
   "author": "",

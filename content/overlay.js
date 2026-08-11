@@ -67,15 +67,18 @@ function classifyPost(el) {
 
   // Reddit-hosted video
   if (postType === "video" || /v\.redd\.it/.test(contentHref)) {
-    // Try to find video source in the DOM
+    // A real https video src in the DOM (e.g. packaged-media) plays directly.
+    // Reddit's own player uses blob: MSE URLs — useless outside the page.
     const video = el.querySelector("video source, video[src]");
     const videoSrc = video ? (video.getAttribute("src") || video.src) : null;
-    if (videoSrc) {
+    if (videoSrc && /^https?:/.test(videoSrc)) {
       return { type: "video", mediaUrl: videoSrc };
     }
-    // Fallback: construct HLS URL from v.redd.it link
+    // Bare v.redd.it base URL — the video renderer resolves the actual
+    // rendition from DASHPlaylist.mpd. Filenames can't be guessed: Reddit
+    // renamed DASH_<res>.mp4 to CMAF_<res>.mp4 and direct guesses 403.
     if (contentHref.includes("v.redd.it")) {
-      return { type: "video", mediaUrl: contentHref + "/DASH_720.mp4" };
+      return { type: "video", mediaUrl: contentHref.replace(/\/+$/, "") };
     }
   }
 

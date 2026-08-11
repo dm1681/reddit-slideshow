@@ -78,7 +78,16 @@ browser.runtime.onMessage.addListener((message, sender) => {
   }
 });
 
-async function handleStartSlideshow() {
+// The slideshow iframe loads (and requests state) while startSlideshow is
+// still running — getCurrentState must wait for it, or it reads an empty session.
+let startInFlight = null;
+
+function handleStartSlideshow() {
+  startInFlight = doStartSlideshow();
+  return startInFlight;
+}
+
+async function doStartSlideshow() {
   session = {
     posts: [],
     currentIndex: 0,
@@ -98,13 +107,21 @@ async function handleStartSlideshow() {
     const result = await browser.tabs.sendMessage(tabs[0].id, { type: "scrapeAndStart" });
     console.log("[reddit-slideshow] scrapeAndStart returned", result?.posts?.length, "posts");
     if (result && result.posts) {
-      try {
-        session.posts = await resolvePosts(result.posts);
-        console.log("[reddit-slideshow] resolved posts:", session.posts.length, "types:", session.posts.map(p => p.type).join(","));
-      } catch (e) {
-        console.error("[reddit-slideshow] resolvePosts failed:", e);
-        session.posts = result.posts;
-      }
+      session.posts = result.posts;
+      // Resolve redgifs lazily — never block slideshow startup on the redgifs
+      // API (it can be slow or hang; the fetches have no timeout). Until
+      // resolution lands, redgifs posts render via the embed fallback.
+      const sess = session;
+      resolvePosts(result.posts)
+        .then((resolved) => {
+          if (session === sess) {
+            session.posts = resolved;
+            console.log("[reddit-slideshow] resolved posts:", resolved.length, "types:", resolved.map(p => p.type).join(","));
+          }
+        })
+        .catch((e) => {
+          console.error("[reddit-slideshow] resolvePosts failed:", e);
+        });
     }
     return { success: true, postCount: session.posts.length };
   } catch (e) {
@@ -115,6 +132,13 @@ async function handleStartSlideshow() {
 }
 
 async function handleGetCurrentState() {
+  if (startInFlight) {
+    try {
+      await startInFlight;
+    } catch (e) {
+      // Start failed — fall through to the session check below
+    }
+  }
   if (!session) {
     return { error: "No active session" };
   }
