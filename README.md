@@ -40,8 +40,8 @@ channel cannot be reused on the other.
 ```sh
 npm run bump patch          # or minor / major / an explicit 1.2.3
 git commit -am "chore: release v0.1.1"
-git tag v0.1.1
-git push --follow-tags
+git tag -a v0.1.1 -m "v0.1.1"
+git push --follow-tags   # --follow-tags pushes annotated tags only
 ```
 
 The tag triggers `.github/workflows/release.yml`, which runs the tests, lints
