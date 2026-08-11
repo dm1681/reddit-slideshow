@@ -1,3 +1,13 @@
 .superpowers/
 node_modules/
 .playwright-mcp/
+graphify-out/
+
+# Build output — XPI and ZIP artifacts are attached to releases, not committed
+web-ext-artifacts/
+
+# Generated at release time and attached to the release, not tracked
+updates.json
+
+# AMO signing credentials. Never commit these; they sign code as you.
+.env

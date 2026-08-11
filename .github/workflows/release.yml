@@ -1,0 +1,91 @@
+name: Release
+
+# Tagging is the release trigger: `npm run bump patch` then push the tag.
+# The job signs the add-on through AMO and attaches the signed XPI to a
+# GitHub Release, which is what the other machines install from.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      # The scraping tests drive a real DOM through Playwright.
+      - run: npx playwright install --with-deps chromium
+
+      - name: Test
+        run: npm test
+
+      - name: Lint against AMO rules
+        run: npm run lint
+
+      # A tag that disagrees with manifest.json would publish an XPI whose
+      # internal version does not match its release, and self-hosted updates
+      # key off the manifest version — so fail loudly here instead.
+      - name: Verify tag matches manifest version
+        run: |
+          MANIFEST_VERSION=$(node -p "require('./manifest.json').version")
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          if [ "$MANIFEST_VERSION" != "$TAG_VERSION" ]; then
+            echo "Tag $GITHUB_REF_NAME implies version $TAG_VERSION but manifest.json says $MANIFEST_VERSION."
+            exit 1
+          fi
+          echo "version=$MANIFEST_VERSION" >> "$GITHUB_ENV"
+
+      - name: Sign with AMO (unlisted)
+        env:
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          if [ -z "$AMO_JWT_ISSUER" ] || [ -z "$AMO_JWT_SECRET" ]; then
+            echo "Missing AMO_JWT_ISSUER / AMO_JWT_SECRET repository secrets."
+            echo "Create them at https://addons.mozilla.org/developers/addon/api/key/"
+            exit 1
+          fi
+          npx web-ext sign \
+            --source-dir . \
+            --channel unlisted \
+            --api-key "$AMO_JWT_ISSUER" \
+            --api-secret "$AMO_JWT_SECRET"
+
+      # web-ext derives its own artifact filename; normalise it so the
+      # update_link in updates.json is stable and predictable.
+      - name: Normalise artifact name
+        run: |
+          SIGNED=$(find web-ext-artifacts -name '*.xpi' | head -1)
+          if [ -z "$SIGNED" ]; then
+            echo "AMO signing produced no .xpi — refusing to publish an unsigned release."
+            exit 1
+          fi
+          mv "$SIGNED" "web-ext-artifacts/reddit-slideshow-${version}.xpi"
+
+      - name: Generate update manifest
+        run: |
+          node scripts/make-update-manifest.js \
+            "${UPDATE_BASE_URL:-https://github.com/${GITHUB_REPOSITORY}/releases/download}"
+        env:
+          UPDATE_BASE_URL: ${{ vars.UPDATE_BASE_URL }}
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "v${version}" \
+            --generate-notes \
+            "web-ext-artifacts/reddit-slideshow-${version}.xpi" \
+            "updates.json"

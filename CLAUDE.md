@@ -15,12 +15,30 @@ Reddit Slideshow is a Firefox browser extension that lets users view Reddit cont
 ## Development Setup
 
 ### Loading the extension in Firefox
+Preferred: `npm start` (web-ext) launches Firefox with the extension loaded and
+live-reloads on file changes, using a persistent `reddit-slideshow-dev` profile.
+
+By hand:
 1. Open `about:debugging#/runtime/this-firefox`
 2. Click "Load Temporary Add-on..."
 3. Select the `manifest.json` file from the project root
 
+Either way the add-on is **temporary** and disappears on browser restart.
+Permanent installs must be signed by Mozilla — see README.md.
+
 ### Reloading after changes
 Click "Reload" on the extension card in `about:debugging`, or press Ctrl+R in the extension's pages.
+
+### Distribution
+Distributed as an **unlisted** AMO-signed add-on; releases are cut by tagging
+(`npm run bump patch` → tag → push), which triggers `.github/workflows/release.yml`.
+See README.md for the full release and install procedure.
+
+Note `manifest.json` is the version source of truth and carries a stable
+`browser_specific_settings.gecko.id`. Never change that ID — Firefox treats a
+different ID as a different extension, so updates would install alongside the
+old copy instead of replacing it. Use `npm run bump` so manifest and package
+versions stay in step.
 
 ## Architecture
 

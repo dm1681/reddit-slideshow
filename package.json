@@ -1,19 +1,31 @@
 {
   "name": "reddit-slideshow",
-  "version": "1.0.0",
-  "main": "index.js",
+  "version": "0.1.0",
+  "description": "Firefox extension that views Reddit posts as a fullscreen slideshow",
+  "private": true,
   "directories": {
     "doc": "docs",
     "test": "test"
   },
   "scripts": {
-    "test": "node test/test-scraping.js && node test/test-integration.js && node test/test-start-race.js && node test/test-vreddit.js"
+    "test": "node test/test-scraping.js && node test/test-integration.js && node test/test-start-race.js && node test/test-vreddit.js",
+    "lint": "web-ext lint --source-dir .",
+    "build": "web-ext build --source-dir .",
+    "sign": "web-ext sign --source-dir . --channel unlisted",
+    "start": "web-ext run --source-dir .",
+    "bump": "node scripts/bump-version.js",
+    "update-manifest": "node scripts/make-update-manifest.js"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "firefox",
+    "webextension",
+    "reddit",
+    "slideshow"
+  ],
+  "author": "dm1681",
   "license": "ISC",
-  "description": "",
-  "dependencies": {
-    "playwright": "^1.58.2"
+  "devDependencies": {
+    "playwright": "^1.58.2",
+    "web-ext": "^10.6.0"
   }
 }
