@@ -120,6 +120,7 @@ npm test           # Playwright-driven DOM scraping + integration tests
 npm run lint       # AMO validator
 npm run build      # unsigned .zip in web-ext-artifacts/
 npm start          # launch Firefox with the extension loaded, live-reloading
+npm run start:zen  # same, but in Zen
 ```
 
 `npm start` uses a persistent profile (`reddit-slideshow-dev`), so Reddit
@@ -128,6 +129,63 @@ logins survive across runs.
 To load a working copy by hand: `about:debugging#/runtime/this-firefox` →
 *Load Temporary Add-on…* → pick `manifest.json`. This lasts until you restart
 Firefox.
+
+### Zen
+
+Zen is a Firefox fork, so `web-ext` drives it once pointed at the binary inside
+the app bundle — `scripts/run-zen.sh` does that. It runs against the real
+**Zevs** profile, so the existing Reddit login is already there, which is what
+makes the slideshow worth testing at all. **Quit Zen first**: a profile only
+opens in one instance, and the script refuses to launch otherwise.
+
+Profiles are resolved by name from Zen's `profiles.ini`, because web-ext's own
+name lookup only searches Firefox's profile directory. Overridable:
+
+```sh
+ZEN_PROFILE_NAME='Default Profile' npm run start:zen   # by name
+ZEN_PROFILE=/path/to/a/profile npm run start:zen       # by path
+ZEN_BIN=/path/to/Zen.app/Contents/MacOS/zen npm run start:zen
+```
+
+Saving any source file reloads the add-on in place — no restart, no
+`about:debugging`. Pages already open need a refresh to pick up new content
+scripts, and the slideshow page needs reopening.
+
+Extra flags pass through — `--browser-console` for background-script logs,
+`--devtools` to open DevTools on the add-on:
+
+```sh
+npm run start:zen -- --browser-console --start-url https://www.reddit.com/r/gifs/
+```
+
+### Inspecting the live page
+
+Reddit's markup is the hard part to test against — fixtures only capture the
+shapes already known about. `ZEN_DEBUG_PORT` starts Zen with Firefox's remote
+agent so the real page can be queried directly, over WebDriver BiDi:
+
+```sh
+ZEN_DEBUG_PORT=9222 npm run start:zen        # in one terminal
+npm run zen:eval -- --list                   # tabs, with their context ids
+npm run zen:eval -- 'String(document.querySelectorAll("shreddit-post").length)'
+```
+
+The expression runs in the first `reddit.com` tab (`--url-match=` picks
+another) and its value is printed. Return a string — `JSON.stringify(...)` —
+for anything structured.
+
+The remote agent is bound to localhost and only lives while Zen does, but it
+does hand full control of a logged-in browser to anything on this machine, so
+it stays off unless `ZEN_DEBUG_PORT` is set. Firefox also allows one session at
+a time and frees it only on a clean disconnect: a run killed mid-flight holds
+it until Zen restarts.
+
+Two things to know. web-ext writes developer prefs into the profile it runs,
+and this is a profile you actually use — pass `ZEN_PROFILE_NAME` to point at a
+throwaway one if that matters. And if Zen has a pending update it applies it on
+launch, restarting the browser out from under `web-ext`; rerun the command if
+the add-on doesn't appear. Failing that, load it by hand from
+`about:debugging` — it lasts until Zen restarts.
 
 ### What ships in the XPI
 

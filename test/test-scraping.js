@@ -65,8 +65,8 @@ async function main() {
   // --- Initial scrape ---
   console.log("Test: Initial scrape (before scroll)");
   // 10 posts in DOM, but post 6 (text) and post 9 (unknown link) should be skipped = 8 posts
-  assert(results.totalElements === 10, `Found 10 shreddit-post elements (got ${results.totalElements})`);
-  assert(results.posts.length === 8, `Scraped 8 supported posts (got ${results.posts.length})`);
+  assert(results.totalElements === 13, `Found 13 shreddit-post elements (got ${results.totalElements})`);
+  assert(results.posts.length === 11, `Scraped 11 supported posts (got ${results.posts.length})`);
 
   // Post 1: image
   const p1 = results.posts.find(p => p.id === "t3_post001");
@@ -105,8 +105,8 @@ async function main() {
   // Post 7: gallery with image fallback
   const p7 = results.posts.find(p => p.id === "t3_post007");
   assert(!!p7, "Post 7 found (gallery)");
-  assert(p7 && p7.type === "image", "Post 7 type is image (gallery fallback)");
-  assert(p7 && p7.mediaUrl.includes("preview.redd.it"), "Post 7 mediaUrl from preview image");
+  assert(p7 && p7.type === "gallery", `Post 7 is flagged as a gallery (got ${p7 && p7.type})`);
+  assert(p7 && p7.galleryHref === "/r/pics/comments/abc007/photo_album/", `Post 7 keeps its permalink for resolution (got ${p7 && p7.galleryHref})`);
 
   // Post 8: imgur gifv → video
   const p8 = results.posts.find(p => p.id === "t3_post008");
@@ -136,8 +136,8 @@ async function main() {
     };
   }, scrapeCode);
 
-  assert(afterScroll.totalElements === 11, `Found 11 elements after scroll (got ${afterScroll.totalElements})`);
-  assert(afterScroll.posts.length === 9, `Scraped 9 posts after scroll (got ${afterScroll.posts.length})`);
+  assert(afterScroll.totalElements === 14, `Found 14 elements after scroll (got ${afterScroll.totalElements})`);
+  assert(afterScroll.posts.length === 12, `Scraped 12 posts after scroll (got ${afterScroll.posts.length})`);
 
   const p11 = afterScroll.posts.find(p => p.id === "t3_post011");
   assert(!!p11, "Post 11 found after scroll");
@@ -152,9 +152,130 @@ async function main() {
   console.log("\nTest: Type distribution");
   const typeCounts = {};
   afterScroll.posts.forEach(p => { typeCounts[p.type] = (typeCounts[p.type] || 0) + 1; });
-  assert(typeCounts.image === 5, `5 image posts (got ${typeCounts.image})`);
-  assert(typeCounts.embed === 3, `3 embed posts (got ${typeCounts.embed})`);
-  assert(typeCounts.video === 1, `1 video post (got ${typeCounts.video})`);
+  assert(typeCounts.image === 4, `4 image posts (got ${typeCounts.image})`);
+  assert(typeCounts.gallery === 1, `1 unresolved gallery (got ${typeCounts.gallery})`);
+  assert(typeCounts.embed === 4, `4 embed posts (got ${typeCounts.embed})`);
+  assert(typeCounts.video === 2, `2 video posts (got ${typeCounts.video})`);
+  assert(typeCounts.crosspost === 1, `1 unresolved crosspost (got ${typeCounts.crosspost})`);
+
+  // --- Resolution from Reddit's JSON ---
+  // Crossposts and galleries carry no usable media in the DOM: a crosspost has
+  // only the original's permalink, a gallery only one preview thumbnail. Both
+  // are filled in from the post's JSON, which is same-origin from the content
+  // script and so goes out with the viewer's cookies.
+  console.log("\nTest: Crossposts and galleries resolve via Reddit's JSON");
+  const resolvedViaJson = await page.evaluate(async (fnSrc) => {
+    eval(fnSrc);
+
+    const requested = [];
+    window.fetch = async (url) => {
+      requested.push(url);
+      const gallery = url.includes("/photo_album/");
+      return {
+        ok: true,
+        json: async () => [
+          {
+            data: {
+              children: [
+                {
+                  data: gallery
+                    ? {
+                        gallery_data: {
+                          items: [{ media_id: "a1" }, { media_id: "b2" }, { media_id: "c3" }],
+                        },
+                        media_metadata: {
+                          a1: { s: { u: "https://i.redd.it/one.jpg" } },
+                          b2: { s: { u: "https://i.redd.it/two.jpg" } },
+                          c3: { s: { mp4: "https://i.redd.it/three.mp4" } },
+                        },
+                      }
+                    : { url: "https://www.redgifs.com/watch/resolvedcrosspost" },
+                },
+              ],
+            },
+          },
+        ],
+      };
+    };
+
+    const scraped = scrapePosts();
+    const resolved = await resolvePendingPosts(scraped);
+    const crosspost = resolved.find((p) => p.id === "t3_post014");
+    return {
+      requested,
+      scrapedCount: scraped.length,
+      resolvedCount: resolved.length,
+      crosspost: crosspost && { type: crosspost.type, mediaUrl: crosspost.mediaUrl, leftover: "crosspostHref" in crosspost },
+      gallery: resolved
+        .filter((p) => String(p.id).startsWith("t3_post007"))
+        .map((p) => ({ id: p.id, type: p.type, mediaUrl: p.mediaUrl, title: p.title, leftover: "galleryHref" in p })),
+    };
+  }, scrapeCode);
+
+  // Absolute, not relative: a content script's fetch throws on a relative URL
+  // rather than resolving it against the page.
+  assert(
+    resolvedViaJson.requested.length === 2 &&
+      resolvedViaJson.requested.every((u) => /^https?:\/\/[^/]+\/r\//.test(u) && u.endsWith("/.json?raw_json=1")),
+    `Both fetches use an absolute URL (got ${JSON.stringify(resolvedViaJson.requested)})`
+  );
+  assert(
+    resolvedViaJson.crosspost &&
+      resolvedViaJson.crosspost.type === "embed" &&
+      resolvedViaJson.crosspost.mediaUrl === "https://www.redgifs.com/ifr/resolvedcrosspost",
+    `Crosspost resolves to the original's media (got ${JSON.stringify(resolvedViaJson.crosspost)})`
+  );
+  assert(
+    resolvedViaJson.crosspost && !resolvedViaJson.crosspost.leftover,
+    "Resolved crosspost drops its crosspostHref marker"
+  );
+
+  // One post per image — a slideshow shows one thing at a time, so a gallery
+  // left as a single post would only ever show its first image.
+  assert(
+    resolvedViaJson.gallery.length === 3,
+    `Gallery expands to one post per image (got ${resolvedViaJson.gallery.length})`
+  );
+  assert(
+    resolvedViaJson.gallery.every((p, i) => p.id === `t3_post007-${i + 1}`),
+    `Expanded gallery posts get distinct ids (got ${resolvedViaJson.gallery.map((p) => p.id).join(",")})`
+  );
+  assert(
+    resolvedViaJson.gallery[0].mediaUrl === "https://i.redd.it/one.jpg" &&
+      resolvedViaJson.gallery[2].mediaUrl === "https://i.redd.it/three.mp4",
+    `Gallery keeps the order from gallery_data (got ${resolvedViaJson.gallery.map((p) => p.mediaUrl).join(",")})`
+  );
+  assert(
+    resolvedViaJson.gallery[2].type === "video",
+    `An mp4 gallery item renders as video (got ${resolvedViaJson.gallery[2].type})`
+  );
+  assert(
+    resolvedViaJson.gallery[0].title.endsWith("(1/3)"),
+    `Expanded posts are numbered (got ${JSON.stringify(resolvedViaJson.gallery[0].title)})`
+  );
+  assert(
+    resolvedViaJson.gallery.every((p) => !p.leftover),
+    "Expanded gallery posts drop the galleryHref marker"
+  );
+  assert(
+    resolvedViaJson.resolvedCount === resolvedViaJson.scrapedCount + 2,
+    `Gallery adds two posts (${resolvedViaJson.scrapedCount} → ${resolvedViaJson.resolvedCount})`
+  );
+
+  // Anything whose JSON cannot be read is dropped, not shown broken.
+  const unresolvable = await page.evaluate(async (fnSrc) => {
+    eval(fnSrc);
+    window.fetch = async () => ({ ok: false, json: async () => ({}) });
+    const scraped = scrapePosts();
+    const resolved = await resolvePendingPosts(scraped);
+    return {
+      dropped: scraped.length - resolved.length,
+      stillThere: resolved.some((p) => p.id === "t3_post014" || p.id === "t3_post007"),
+    };
+  }, scrapeCode);
+
+  assert(unresolvable.dropped === 2, `Unresolvable crosspost and gallery are dropped (dropped ${unresolvable.dropped})`);
+  assert(!unresolvable.stillThere, "Neither reaches the slideshow")
 
   console.log(`\n--- Results: ${passed} passed, ${failed} failed ---`);
 

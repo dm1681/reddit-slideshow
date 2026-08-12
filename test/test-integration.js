@@ -88,12 +88,33 @@ async function main() {
   scrapeFnSrc = scrapeFnSrc.replace(/^\/\/[^\n]*\n+let overlayElement[^\n]*\nlet savedOverflow[^\n]*\n+\/\/ --- DOM scraping ---\n*/m, "");
 
   // Step 1: Run scraping on mock Reddit page
-  const scrapedPosts = await page.evaluate((fnSrc) => {
+  // Mirrors the content script: crossposts carry no media in the DOM and are
+  // filled in from the original post's JSON before anything is handed on.
+  const scrapedPosts = await page.evaluate(async (fnSrc) => {
     eval(fnSrc);
-    return scrapePosts();
+    window.fetch = async (url) => ({
+      ok: true,
+      json: async () => [
+        {
+          data: {
+            children: [
+              {
+                data: url.includes("/photo_album/")
+                  ? {
+                      gallery_data: { items: [{ media_id: "g1" }] },
+                      media_metadata: { g1: { s: { u: "https://i.redd.it/gallery-one.jpg" } } },
+                    }
+                  : { url: "https://i.redd.it/crosspost-original.jpg" },
+              },
+            ],
+          },
+        },
+      ],
+    });
+    return resolvePendingPosts(scrapePosts());
   }, scrapeFnSrc);
 
-  assert(scrapedPosts.length === 8, `Scraped 8 posts from mock page (got ${scrapedPosts.length})`);
+  assert(scrapedPosts.length === 11, `Scraped 11 posts from mock page (got ${scrapedPosts.length})`);
   assert(scrapedPosts.every(p => p.id && p.title && p.mediaUrl), "All posts have id, title, mediaUrl");
 
   // Step 2: Simulate background state management (posts returned directly from scrapeAndStart)
@@ -115,7 +136,7 @@ async function main() {
     };
   }, scrapedPosts);
 
-  assert(bgState.posts.length === 8, `Background stored 8 posts (got ${bgState.posts.length})`);
+  assert(bgState.posts.length === 11, `Background stored 11 posts (got ${bgState.posts.length})`);
   assert(bgState.currentIndex === 0, "Current index is 0");
 
   // Step 3: Load slideshow page and render posts
@@ -187,7 +208,7 @@ async function main() {
   assert(renderResult.title === "Beautiful sunset", "Post title rendered");
   assert(renderResult.meta.includes("r/pics"), "Post meta includes subreddit");
   assert(renderResult.meta.includes("u/photographer42"), "Post meta includes author");
-  assert(renderResult.progress === "1 / 8", `Progress shows 1 / 8 (got ${renderResult.progress})`);
+  assert(renderResult.progress === "1 / 11", `Progress shows 1 / 11 (got ${renderResult.progress})`);
 
   // ================================================================
   // TEST 2: Navigation simulation
@@ -223,7 +244,7 @@ async function main() {
     return results;
   }, bgState);
 
-  assert(navResult.length === 8, `Navigated through all 8 posts (got ${navResult.length})`);
+  assert(navResult.length === 11, `Navigated through all 11 posts (got ${navResult.length})`);
   for (const r of navResult) {
     assert(r.hasContent, `Post ${r.index + 1} (${r.postType}) rendered content`);
   }
@@ -270,7 +291,7 @@ async function main() {
     console.log(`    [flow] ${entry}`);
   }
   assert(!msgFlowResult.wouldShowNoImages, "Slideshow would NOT show 'no images found'");
-  assert(msgFlowResult.postCount === 8, `Full flow delivers 8 posts (got ${msgFlowResult.postCount})`);
+  assert(msgFlowResult.postCount === 11, `Full flow delivers 11 posts (got ${msgFlowResult.postCount})`);
 
   // ================================================================
   // TEST 4: Verify actual slideshow.js init behavior
@@ -349,10 +370,10 @@ async function main() {
   }, bgState);
 
   assert(!initResult.error, `Init succeeded (${initResult.error || "ok"})`);
-  assert(initResult.postCount === 8, `Slideshow received 8 posts (got ${initResult.postCount})`);
+  assert(initResult.postCount === 11, `Slideshow received 11 posts (got ${initResult.postCount})`);
   assert(initResult.hasImg, "Slideshow rendered an image");
   assert(initResult.title === "Beautiful sunset", "Slideshow shows correct title");
-  assert(initResult.progress === "1 / 8", `Progress shows 1 / 8 (got ${initResult.progress})`);
+  assert(initResult.progress === "1 / 11", `Progress shows 1 / 11 (got ${initResult.progress})`);
 
   // Summary
   console.log(`\n--- Results: ${passed} passed, ${failed} failed ---`);

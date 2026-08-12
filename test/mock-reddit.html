@@ -92,6 +92,36 @@
   <!-- Spacer to ensure page is scrollable -->
   <div style="height: 2000px;"></div>
 
+  <!-- Post 12: crosspost of a redgifs post. content-href is the ORIGINAL
+       post's permalink, so the media is only reachable through the embedded
+       copy inside. These used to be dropped from the slideshow entirely. -->
+  <shreddit-post id="t3_post012" post-type="crosspost"
+    post-title="Crossposted redgifs clip" author="FabulousHorror" subreddit-prefixed-name="r/crossposts"
+    score="1200" permalink="/r/crossposts/comments/abc012/crossposted_clip/"
+    content-href="https://www.reddit.com/r/original/comments/xyz012/original_clip/">
+    <shreddit-embed content-href="https://www.redgifs.com/watch/crosspostedclip"></shreddit-embed>
+  </shreddit-post>
+
+  <!-- Post 13: crosspost carrying only a link to the media host -->
+  <shreddit-post id="t3_post013" post-type="crosspost"
+    post-title="Crossposted reddit video" author="reposter" subreddit-prefixed-name="r/crossposts"
+    score="800" permalink="/r/crossposts/comments/abc013/crossposted_video/"
+    content-href="https://www.reddit.com/r/original/comments/xyz013/original_video/">
+    <a href="https://v.redd.it/crosspostvid">Source video</a>
+  </shreddit-post>
+
+  <!-- Post 14: crosspost the way Reddit actually renders one — content-href is
+       the ORIGINAL post's permalink and the DOM carries no media whatsoever,
+       just links and a community icon. Only the original's JSON has the URL. -->
+  <shreddit-post id="t3_post014" post-type="crosspost"
+    post-title="Crosspost with nothing in the DOM" author="FabulousHorror" subreddit-prefixed-name="r/OiledLust"
+    score="640" permalink="/r/OiledLust/comments/abc014/crosspost_no_dom/"
+    content-href="/r/suckdry/comments/xyz014/original_post/">
+    <a href="https://www.reddit.com/r/OiledLust/">r/OiledLust</a>
+    <img src="https://styles.redditmedia.com/t5_abc/styles/communityIcon.png" alt="icon">
+    <a href="/r/suckdry/comments/xyz014/original_post/">crossposted from r/suckdry</a>
+  </shreddit-post>
+
   <!-- Infinite scroll simulation -->
   <script>
     const lazyPostsHTML = `

@@ -37,20 +37,29 @@ const MOCK_POSTS = [
 // loads from a local moz-extension:// URL in tens of ms, far faster than this.
 const REDGIFS_LATENCY_MS = 150;
 
-function buildHarness({ scrapeDelayMs = 0 } = {}) {
+// Resolved posts are broadcast on a short debounce, so waits have to cover the
+// token lookup, the gif lookup and that coalescing window.
+const BROADCAST_DEBOUNCE_MS = 200;
+const RESOLVE_WAIT_MS = REDGIFS_LATENCY_MS * 2 + BROADCAST_DEBOUNCE_MS + 100;
+
+function buildHarness({ scrapeDelayMs = 0, extraPosts = [], hangIds = [] } = {}) {
   const listeners = [];
+  const broadcasts = [];
 
   const browser = {
     runtime: {
       onMessage: { addListener: (fn) => listeners.push(fn) },
       getURL: (p) => `moz-extension://test/${p}`,
+      // Extension-wide broadcast to the open slideshow page
+      sendMessage: async (msg) => { broadcasts.push(msg); },
     },
     tabs: {
       query: async () => [{ id: 1 }],
       sendMessage: async (tabId, msg) => {
         if (msg.type === "scrapeAndStart") {
           if (scrapeDelayMs) await sleep(scrapeDelayMs);
-          return { success: true, posts: JSON.parse(JSON.stringify(MOCK_POSTS)) };
+          const posts = [...MOCK_POSTS, ...extraPosts];
+          return { success: true, posts: JSON.parse(JSON.stringify(posts)) };
         }
         if (msg.type === "loadMore") return { posts: [] };
         return { success: true };
@@ -66,9 +75,14 @@ function buildHarness({ scrapeDelayMs = 0 } = {}) {
       return { ok: true, json: async () => ({ token: "tok", expires_in: 3600 }) };
     }
     if (url.includes("/v2/gifs/")) {
+      // A request that never answers, standing in for the real API hanging.
+      const id = url.split("/v2/gifs/")[1];
+      if (hangIds.includes(id)) return new Promise(() => {});
       return {
         ok: true,
-        json: async () => ({ gif: { urls: { hd: "https://media.redgifs.com/abc.mp4" } } }),
+        json: async () => ({
+          gif: { hasAudio: true, urls: { hd: "https://media.redgifs.com/abc.mp4" } },
+        }),
       };
     }
     return { ok: false, json: async () => ({}) };
@@ -85,7 +99,7 @@ function buildHarness({ scrapeDelayMs = 0 } = {}) {
     throw new Error(`Expected 1 onMessage listener, got ${listeners.length}`);
   }
   const dispatch = (msg) => listeners[0](msg, { tab: { id: 1 } });
-  return { dispatch };
+  return { dispatch, broadcasts };
 }
 
 let passed = 0;
@@ -151,7 +165,7 @@ async function main() {
     const { dispatch } = buildHarness();
 
     await dispatch({ type: "startSlideshow" });
-    await sleep(REDGIFS_LATENCY_MS * 2 + 100); // token + gif lookup + margin
+    await sleep(RESOLVE_WAIT_MS); // token + gif lookup + broadcast debounce
 
     const state = await dispatch({ type: "getCurrentState" });
     const redgifsPost = state.posts && state.posts.find((p) => p.id === "t3_aaa");
@@ -159,6 +173,79 @@ async function main() {
     assert(
       redgifsPost && redgifsPost.type === "video" && redgifsPost.mediaUrl.endsWith(".mp4"),
       `Redgifs post resolved to direct MP4 (got type=${redgifsPost && redgifsPost.type}, url=${redgifsPost && redgifsPost.mediaUrl})`
+    );
+    assert(
+      redgifsPost && redgifsPost.hasAudio === true,
+      "Resolved post carries hasAudio from the redgifs API"
+    );
+  }
+
+  // ================================================================
+  // TEST 4: resolved posts are pushed to the already-open slideshow
+  // ================================================================
+  // The slideshow snapshots posts when it loads — before resolution lands. With
+  // no push it kept rendering redgifs through the muted embed player until a
+  // preemptive refill happened to replace the list.
+  console.log("\nTest: resolved posts are broadcast to the open slideshow");
+  {
+    const { dispatch, broadcasts } = buildHarness();
+
+    await dispatch({ type: "startSlideshow" });
+    assert(broadcasts.length === 0, "No broadcast before resolution completes");
+
+    await sleep(RESOLVE_WAIT_MS);
+
+    const update = broadcasts.find((m) => m.type === "postsUpdated");
+    assert(!!update, "postsUpdated broadcast sent after resolution");
+    const pushed = update && update.posts.find((p) => p.id === "t3_aaa");
+    assert(
+      pushed && pushed.type === "video",
+      `Broadcast carries the resolved video post (got type=${pushed && pushed.type})`
+    );
+  }
+
+  // ================================================================
+  // TEST 5: one hanging redgifs request must not stall the rest
+  // ================================================================
+  // Resolution used to be a single Promise.all over the whole batch, so one
+  // request that never answered swallowed every other post's result and the
+  // broadcast with it — leaving the entire session on the muted embed player.
+  console.log("\nTest: a hanging redgifs request does not stall the batch");
+  {
+    const { dispatch, broadcasts } = buildHarness({
+      extraPosts: [
+        {
+          id: "t3_ccc",
+          title: "Redgifs post whose lookup hangs",
+          type: "embed",
+          mediaUrl: "https://www.redgifs.com/ifr/hang",
+          originalUrl: "https://www.redgifs.com/watch/hang",
+        },
+      ],
+      hangIds: ["hang"],
+    });
+
+    await dispatch({ type: "startSlideshow" });
+    await sleep(RESOLVE_WAIT_MS);
+
+    const state = await dispatch({ type: "getCurrentState" });
+    const resolved = state.posts && state.posts.find((p) => p.id === "t3_aaa");
+    const stuck = state.posts && state.posts.find((p) => p.id === "t3_ccc");
+
+    assert(
+      resolved && resolved.type === "video",
+      `Other redgifs posts still resolve (got type=${resolved && resolved.type})`
+    );
+    assert(
+      stuck && stuck.type === "embed",
+      `The hanging post keeps its embed fallback (got type=${stuck && stuck.type})`
+    );
+    const update = broadcasts.find((m) => m.type === "postsUpdated");
+    assert(!!update, "Broadcast still reaches the slideshow despite the hang");
+    const pushed = update && update.posts.find((p) => p.id === "t3_aaa");
+    assert(
+      pushed && pushed.type === "video",
+      `Broadcast carries the posts that did resolve (got type=${pushed && pushed.type})`
     );
   }
 

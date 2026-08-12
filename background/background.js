@@ -9,11 +9,18 @@ let session = null;
 let redgifsToken = null;
 let redgifsTokenExpiry = 0;
 
+// A redgifs request that never answers used to stall resolution indefinitely.
+// Nothing here is worth waiting on longer than this — a post that misses the
+// window just stays on its embed fallback.
+const REDGIFS_TIMEOUT_MS = 8000;
+
 async function getRedgifsToken() {
   if (redgifsToken && Date.now() < redgifsTokenExpiry) {
     return redgifsToken;
   }
-  const resp = await fetch("https://api.redgifs.com/v2/auth/temporary");
+  const resp = await fetch("https://api.redgifs.com/v2/auth/temporary", {
+    signal: AbortSignal.timeout(REDGIFS_TIMEOUT_MS),
+  });
   if (!resp.ok) return null;
   const data = await resp.json();
   redgifsToken = data.token || data.access_token;
@@ -29,10 +36,15 @@ async function resolveRedgifsUrl(id) {
       Authorization: `Bearer ${token}`,
       Referer: "https://www.redgifs.com/",
     },
+    signal: AbortSignal.timeout(REDGIFS_TIMEOUT_MS),
   });
   if (!resp.ok) return null;
   const data = await resp.json();
-  return (data.gif && data.gif.urls && (data.gif.urls.hd || data.gif.urls.sd)) || null;
+  const gif = data.gif;
+  if (!gif || !gif.urls) return null;
+  // `hd`/`sd` carry the audio track; the `silent` rendition is the muted cut.
+  const url = gif.urls.hd || gif.urls.sd;
+  return url ? { url, hasAudio: gif.hasAudio !== false } : null;
 }
 
 // --- Resolve embed posts to direct video URLs ---
@@ -43,9 +55,9 @@ async function resolvePost(post) {
     const match = post.originalUrl.match(/redgifs\.com\/(?:watch|ifr)\/(\w+)/i);
     if (match) {
       try {
-        const mp4Url = await resolveRedgifsUrl(match[1]);
-        if (mp4Url) {
-          return { ...post, type: "video", mediaUrl: mp4Url };
+        const resolved = await resolveRedgifsUrl(match[1]);
+        if (resolved) {
+          return { ...post, type: "video", mediaUrl: resolved.url, hasAudio: resolved.hasAudio };
         }
       } catch (e) {
         // API failed — keep as embed fallback
@@ -55,8 +67,50 @@ async function resolvePost(post) {
   return post;
 }
 
-async function resolvePosts(posts) {
-  return Promise.all(posts.map(resolvePost));
+// Resolve in place, publishing as each post lands. Promise.all over the whole
+// batch made every post hostage to the slowest fetch — and one that hung took
+// the entire broadcast with it, leaving every redgifs post on its muted embed
+// player for the life of the session.
+function resolvePostsInPlace(sess, offset) {
+  const tasks = [];
+  for (let i = offset; i < sess.posts.length; i++) {
+    const index = i;
+    const post = sess.posts[index];
+    tasks.push(
+      resolvePost(post)
+        .then((resolved) => {
+          if (session !== sess || resolved === post) return;
+          sess.posts[index] = resolved;
+          broadcastPosts(sess);
+        })
+        .catch(() => {
+          // Resolution failed for this post — it keeps its embed fallback
+        })
+    );
+  }
+  return Promise.all(tasks);
+}
+
+// Posts resolve one at a time but arrive in bursts, so updates are coalesced
+// into a single message rather than one per post.
+const BROADCAST_DEBOUNCE_MS = 200;
+let broadcastTimer = null;
+
+function broadcastPosts(sess) {
+  if (broadcastTimer) return;
+  broadcastTimer = setTimeout(() => {
+    broadcastTimer = null;
+    if (session !== sess) return;
+    console.log(
+      "[reddit-slideshow] broadcasting posts:",
+      sess.posts.length,
+      "types:",
+      sess.posts.map((p) => p.type).join(",")
+    );
+    browser.runtime.sendMessage({ type: "postsUpdated", posts: sess.posts }).catch(() => {
+      // No slideshow listening yet — it pulls the list itself on startup
+    });
+  }, BROADCAST_DEBOUNCE_MS);
 }
 
 // --- Message API ---
@@ -109,18 +163,22 @@ async function doStartSlideshow() {
     if (result && result.posts) {
       session.posts = result.posts;
       // Resolve redgifs lazily — never block slideshow startup on the redgifs
-      // API (it can be slow or hang; the fetches have no timeout). Until
-      // resolution lands, redgifs posts render via the embed fallback.
+      // API. Until a post resolves it renders via the embed fallback, and each
+      // one that lands is pushed to the slideshow, which snapshotted the list
+      // before any of this finished.
       const sess = session;
-      resolvePosts(result.posts)
-        .then((resolved) => {
-          if (session === sess) {
-            session.posts = resolved;
-            console.log("[reddit-slideshow] resolved posts:", resolved.length, "types:", resolved.map(p => p.type).join(","));
-          }
+      resolvePostsInPlace(sess, 0)
+        .then(() => {
+          if (session !== sess) return;
+          console.log(
+            "[reddit-slideshow] resolved posts:",
+            sess.posts.length,
+            "types:",
+            sess.posts.map((p) => p.type).join(",")
+          );
         })
         .catch((e) => {
-          console.error("[reddit-slideshow] resolvePosts failed:", e);
+          console.error("[reddit-slideshow] resolvePostsInPlace failed:", e);
         });
     }
     return { success: true, postCount: session.posts.length };
@@ -160,12 +218,18 @@ async function handleGetPosts(message) {
       const result = await browser.tabs.sendMessage(session.tabId, { type: "loadMore" });
       if (result && result.posts) {
         const existingIds = new Set(session.posts.map((p) => p.id));
-        let newPosts = result.posts.filter((p) => !existingIds.has(p.id));
+        const newPosts = result.posts.filter((p) => !existingIds.has(p.id));
         if (newPosts.length === 0) {
           session.exhausted = true;
         } else {
-          newPosts = await resolvePosts(newPosts);
+          // Appended first, resolved after: waiting on redgifs here would hold
+          // up the refill the slideshow is already asking for.
+          const offset = session.posts.length;
           session.posts.push(...newPosts);
+          const sess = session;
+          resolvePostsInPlace(sess, offset).catch(() => {
+            // Individual failures are already handled per post
+          });
         }
       }
     } catch (e) {
