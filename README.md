@@ -59,10 +59,20 @@ text; the valid sets come from
 [the categories API](https://addons.mozilla.org/api/v5/addons/categories/) and
 [the licence list](https://mozilla.github.io/addons-server/topics/api/licenses.html).
 
-If AMO approval outruns the workflow's 30-minute wait, `web-ext` gives up
-*after* the submission has already gone through. The release still publishes;
-only the GitHub copy of the `.xpi` is skipped. Never retry by re-tagging the
-same version — AMO will reject it as already submitted. Bump instead.
+### When approval outruns the wait
+
+`web-ext` waits five minutes for AMO to mark the version public, then gives up.
+Auto-approved versions return well inside that; anything held for human review
+takes days, which is not worth paying CI minutes to sit through.
+
+Giving up is not a failed release. The workflow tells the two cases apart by
+reading `web-ext`'s output: `Approval: timeout exceeded` means AMO already
+accepted the submission, so the release continues and only the `.xpi` copy is
+skipped. Any other failure — a rejected package, bad credentials — still fails
+the job.
+
+**Never retry by re-tagging the same version.** Once AMO has a version number
+it will not take it again, on either channel. Bump and tag afresh.
 
 ### One-time setup: AMO API credentials
 

@@ -51,10 +51,17 @@ jobs:
       # listing fields (categories, summary, description, license) that AMO
       # requires; without it a first listed submission is rejected.
       #
-      # The default 15-minute approval wait is not always enough for a listed
-      # version, and web-ext throws on timeout — after the submission has
-      # already succeeded. Allowing 30 minutes makes that far less likely, and
-      # the steps below treat a missing XPI as non-fatal for the same reason.
+      # Two distinct outcomes have to be told apart. web-ext exits non-zero
+      # both when AMO rejects the submission and when the submission succeeded
+      # but review outran the wait. The first must fail the release; the second
+      # must not, because the version is already with AMO and cannot be
+      # resubmitted under the same number — failing there would cost the
+      # GitHub release with no way to retry short of a version bump.
+      #
+      # The wait is deliberately short. AMO hosts the listed add-on, so the XPI
+      # is only a convenience copy; auto-approved versions return well inside
+      # five minutes, and anything held for human review would not arrive
+      # within any timeout worth paying CI minutes for.
       - name: Sign and publish to AMO (listed)
         env:
           AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
@@ -65,13 +72,34 @@ jobs:
             echo "Create them at https://addons.mozilla.org/developers/addon/api/key/"
             exit 1
           fi
+
+          # Logged outside the source dir: web-ext packages the source dir
+          # after this pipeline has already created the file, so a log written
+          # here would be swept into the XPI.
+          LOG="$RUNNER_TEMP/web-ext-sign.log"
+
+          set +e
           npx web-ext sign \
             --source-dir . \
             --channel listed \
             --amo-metadata amo-metadata.json \
-            --approval-timeout 1800000 \
+            --approval-timeout 300000 \
             --api-key "$AMO_JWT_ISSUER" \
-            --api-secret "$AMO_JWT_SECRET"
+            --api-secret "$AMO_JWT_SECRET" 2>&1 | tee "$LOG"
+          STATUS=${PIPESTATUS[0]}
+          set -e
+
+          if [ "$STATUS" -eq 0 ]; then
+            exit 0
+          fi
+
+          if grep -q 'Approval: timeout exceeded' "$LOG"; then
+            echo "::warning title=AMO approval pending::Submission accepted; review outran the wait. The release continues without the signed XPI."
+            exit 0
+          fi
+
+          echo "web-ext sign failed for a reason other than slow approval — see the log above."
+          exit 1
 
       # AMO hosts the listed add-on, so the XPI here is a convenience copy for
       # the GitHub release, not the delivery mechanism. Its absence must not
