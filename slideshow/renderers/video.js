@@ -177,7 +177,11 @@ const VideoRenderer = {
     video.addEventListener("error", showError);
 
     if (onEnded) {
-      video.addEventListener("ended", onEnded);
+      // Guarded like every other advance here: nothing from a torn-down
+      // renderer may move the slideshow off the slide that replaced it.
+      video.addEventListener("ended", () => {
+        if (!cancelled) onEnded();
+      });
     }
 
     container.appendChild(video);
