@@ -156,7 +156,13 @@
     const renderer = renderers[post.type];
     const onEnded = autoAdvanceOn ? () => autoAdvanceNext() : null;
     if (renderer) {
-      cleanupCurrentRender = renderer.render(post, contentContainer, onEnded);
+      // A resolved video keeps the player it was resolved from, so a file that
+      // will not play falls back to that instead of costing the post.
+      const onFail =
+        post.type === "video" && post.embedUrl
+          ? () => renderEmbedFallback(post, onEnded)
+          : null;
+      cleanupCurrentRender = renderer.render(post, contentContainer, onEnded, onFail);
     } else {
       const unsupportedDiv = document.createElement("div");
       unsupportedDiv.style.cssText = "color:#777;font-size:14px;";
@@ -175,6 +181,22 @@
 
     // Check if we need more posts
     checkPreemptiveFetch();
+  }
+
+  // The direct file could not be played even after a retry. The post came from
+  // an embeddable host, so hand it to that player rather than showing an error
+  // and — with auto-advance on — skipping past it.
+  function renderEmbedFallback(post, onEnded) {
+    console.warn("[reddit-slideshow] falling back to the embed player for", post.mediaUrl);
+    if (cleanupCurrentRender) {
+      cleanupCurrentRender();
+      cleanupCurrentRender = null;
+    }
+    cleanupCurrentRender = EmbedRenderer.render(
+      { ...post, type: "embed", mediaUrl: post.embedUrl },
+      contentContainer,
+      onEnded
+    );
   }
 
   function updatePostInfo(post) {

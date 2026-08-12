@@ -55,8 +55,15 @@ function saveAudioPref() {
   }
 }
 
+// A media error can be a genuinely bad file or a blip mid-buffer — the element
+// reports both the same way. One retry separates them cheaply.
+const VIDEO_RETRY_DELAY_MS = 600;
+
 const VideoRenderer = {
-  render(post, container, onEnded) {
+  // onFail, when given, is the caller's escape hatch: the file could not be
+  // played even after a retry, and the post is better shown some other way
+  // than written off.
+  render(post, container, onEnded, onFail) {
     container.innerHTML = "";
 
     const spinner = document.createElement("div");
@@ -83,6 +90,8 @@ const VideoRenderer = {
     let soundHint = null;
     let gestureHandler = null;
     let errorTimer = null;
+    let retryTimer = null;
+    let retried = false;
 
     function clearSoundHint() {
       if (soundHint) {
@@ -148,6 +157,32 @@ const VideoRenderer = {
       saveAudioPref();
     });
 
+    // A blip while buffering used to be fatal: the video was wiped and, with
+    // auto-advance on, the post skipped two seconds later — even when it was
+    // perfectly watchable in the player it came from.
+    function handleMediaError() {
+      if (cancelled) return;
+
+      const code = video.error ? video.error.code : null;
+      if (!retried) {
+        retried = true;
+        console.warn("[reddit-slideshow] video error, retrying:", post.mediaUrl, "code", code);
+        retryTimer = setTimeout(() => {
+          if (cancelled) return;
+          video.load();
+          video.src = post.mediaUrl;
+        }, VIDEO_RETRY_DELAY_MS);
+        return;
+      }
+
+      console.warn("[reddit-slideshow] video unplayable:", post.mediaUrl, "code", code);
+      if (onFail) {
+        onFail();
+        return;
+      }
+      showError();
+    }
+
     function showError() {
       // Teardown sets src="" on the outgoing <video>, and Firefox reports that
       // as an error a tick later — by which time the container already holds
@@ -174,7 +209,7 @@ const VideoRenderer = {
       attemptPlay();
     });
 
-    video.addEventListener("error", showError);
+    video.addEventListener("error", handleMediaError);
 
     if (onEnded) {
       // Guarded like every other advance here: nothing from a torn-down
@@ -210,6 +245,7 @@ const VideoRenderer = {
       // Cleared with the renderer: an advance queued by a dead slide would
       // skip whatever replaced it.
       if (errorTimer) clearTimeout(errorTimer);
+      if (retryTimer) clearTimeout(retryTimer);
       clearSoundHint();
       video.pause();
       video.src = "";
