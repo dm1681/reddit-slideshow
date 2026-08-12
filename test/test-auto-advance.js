@@ -357,6 +357,54 @@ async function main() {
 
       await page.close();
     }
+    // ================================================================
+    // TEST 11: an unplayable video retries, then falls back to its player
+    // ================================================================
+    // A blip mid-buffer looks exactly like a bad file, so one retry separates
+    // them. If it really cannot be played the post is handed to the player it
+    // was resolved from, rather than shown as an error and skipped.
+    console.log("\nTest: an unplayable video retries, then falls back");
+    {
+      const page = await newPage(browser, baseUrl, { fakeClock: false });
+
+      const withFallback = await page.evaluate(async () => {
+        const container = document.getElementById("content-container");
+        let failed = 0;
+        const cleanup = VideoRenderer.render(
+          { id: "v", type: "video", title: "v", mediaUrl: "/missing.webm", embedUrl: "/embed" },
+          container,
+          null,
+          () => failed++
+        );
+        await new Promise((r) => setTimeout(r, 3000));
+        const text = container.textContent;
+        cleanup();
+        return { failed, showsError: text.includes("Failed") };
+      });
+
+      assert(withFallback.failed === 1, `Falls back exactly once (got ${withFallback.failed})`);
+      assert(!withFallback.showsError, "Does not show an error when a fallback exists");
+
+      // With no fallback the old behaviour stands: report it, then move on.
+      const withoutFallback = await page.evaluate(async () => {
+        const container = document.getElementById("content-container");
+        let advances = 0;
+        const cleanup = VideoRenderer.render(
+          { id: "v2", type: "video", title: "v2", mediaUrl: "/missing.webm" },
+          container,
+          () => advances++
+        );
+        await new Promise((r) => setTimeout(r, 4000));
+        const text = container.textContent;
+        cleanup();
+        return { advances, showsError: text.includes("Failed") };
+      });
+
+      assert(withoutFallback.showsError, "Reports the failure when there is nothing to fall back to");
+      assert(withoutFallback.advances === 1, `Still advances so auto-advance is not stranded (got ${withoutFallback.advances})`);
+
+      await page.close();
+    }
   } finally {
     await browser.close();
     server.close();

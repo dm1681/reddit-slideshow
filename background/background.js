@@ -57,7 +57,15 @@ async function resolvePost(post) {
       try {
         const resolved = await resolveRedgifsUrl(match[1]);
         if (resolved) {
-          return { ...post, type: "video", mediaUrl: resolved.url, hasAudio: resolved.hasAudio };
+          return {
+            ...post,
+            type: "video",
+            mediaUrl: resolved.url,
+            hasAudio: resolved.hasAudio,
+            // Kept so a direct file that will not play can fall back to the
+            // player it came from, rather than the post being lost.
+            embedUrl: post.mediaUrl,
+          };
         }
       } catch (e) {
         // API failed — keep as embed fallback
