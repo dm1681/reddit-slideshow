@@ -24,6 +24,10 @@
   let autoAdvanceOn = false;
   let exhausted = false;
   let fetchInProgress = false;
+  let initialized = false;
+  // An update that arrived before init finished, held back so init's own
+  // (older) snapshot cannot overwrite it.
+  let pendingPosts = null;
 
   // --- Renderer map ---
   const renderers = {
@@ -48,6 +52,14 @@
       currentIndex = state.currentIndex || 0;
       exhausted = state.exhausted || false;
 
+      // An update that landed while this was in flight is the fresher list —
+      // taking state.posts over it would put the embed fallbacks back.
+      initialized = true;
+      if (pendingPosts) {
+        posts = pendingPosts;
+        pendingPosts = null;
+      }
+
       if (posts.length === 0) {
         const noPostsDiv = document.createElement("div");
         noPostsDiv.style.cssText = "color:#777;font-size:14px;";
@@ -58,6 +70,7 @@
       }
 
       renderCurrentPost();
+      pullUntilResolved();
     } catch (e) {
       const errDiv = document.createElement("div");
       errDiv.style.cssText = "color:#777;font-size:14px;";
@@ -67,20 +80,36 @@
     }
   }
 
-  // --- Background push: posts resolved after this page snapshotted them ---
-  // Redgifs embeds become direct videos here. Re-render only when the post on
-  // screen actually changed, so a background update never restarts playback of
-  // something the user is already watching.
-  browser.runtime.onMessage.addListener((message) => {
-    if (message.type !== "postsUpdated" || !Array.isArray(message.posts)) return;
+  // --- Posts resolved after this page snapshotted them ---
+  // Redgifs embeds become direct videos here, arriving either as a push from
+  // the background or through the pull below.
+  function applyPosts(next) {
+    if (!Array.isArray(next) || next.length === 0) return;
+
+    // Nothing is on screen yet — hold it for init, which would otherwise
+    // overwrite it with the snapshot it is already fetching.
+    if (!initialized) {
+      pendingPosts = next;
+      return;
+    }
 
     const before = posts[currentIndex];
-    posts = message.posts;
+    posts = next;
     const after = posts[currentIndex];
 
+    // Re-render only when the post on screen actually changed, so an update
+    // never restarts playback of something the viewer is already watching.
     const changed =
       before && after && before.id === after.id &&
       (before.type !== after.type || before.mediaUrl !== after.mediaUrl);
+
+    console.log(
+      "[reddit-slideshow] posts updated:",
+      posts.length,
+      "index", currentIndex,
+      before ? `${before.type}→${after && after.type}` : "(nothing on screen)",
+      changed ? "re-rendering" : "no change on screen"
+    );
 
     if (changed) {
       renderCurrentPost();
@@ -88,7 +117,29 @@
       updateProgress();
       updateNavButtons();
     }
+  }
+
+  browser.runtime.onMessage.addListener((message) => {
+    if (message && message.type === "postsUpdated") applyPosts(message.posts);
   });
+
+  // A push can be missed — sent before this page was listening, or not
+  // delivered at all — and the first batch would then sit on the muted embed
+  // player for the whole session. So ask, too, while anything is unresolved.
+  const PULL_DELAYS_MS = [500, 1500, 3000, 6000, 10000];
+
+  async function pullUntilResolved() {
+    for (const delay of PULL_DELAYS_MS) {
+      if (!posts.some((p) => p.type === "embed")) return;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      try {
+        const state = await browser.runtime.sendMessage({ type: "getCurrentState" });
+        if (state && !state.error) applyPosts(state.posts);
+      } catch (e) {
+        // Background not answering — try again on the next delay
+      }
+    }
+  }
 
   // --- Rendering ---
   function renderCurrentPost() {

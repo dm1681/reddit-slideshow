@@ -51,6 +51,42 @@ function getEmbedUrl(contentHref) {
   return null;
 }
 
+// What a URL on its own says about the media — no DOM, so it can be applied
+// to a post's own content-href or to a link found inside it.
+function classifyUrl(url) {
+  if (!url) return null;
+
+  if (/\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i.test(url)) {
+    return { type: "image", mediaUrl: url };
+  }
+
+  // Bare v.redd.it base URL — the video renderer resolves the actual rendition
+  // from DASHPlaylist.mpd. Filenames can't be guessed: Reddit renamed
+  // DASH_<res>.mp4 to CMAF_<res>.mp4 and direct guesses 403.
+  if (/v\.redd\.it/.test(url)) {
+    return { type: "video", mediaUrl: url.replace(/\/+$/, "") };
+  }
+
+  const embedUrl = getEmbedUrl(url);
+  if (embedUrl) {
+    // Special case: imgur mp4 is a direct video
+    if (embedUrl.endsWith(".mp4")) {
+      return { type: "video", mediaUrl: embedUrl };
+    }
+    return { type: "embed", mediaUrl: embedUrl, originalUrl: url };
+  }
+
+  return null;
+}
+
+// A real https video src in the DOM (e.g. packaged-media) plays directly.
+// Reddit's own player uses blob: MSE URLs — useless outside the page.
+function findPlayableVideo(el) {
+  const video = el.querySelector("video source, video[src]");
+  const src = video ? video.getAttribute("src") || video.src : null;
+  return src && /^https?:/.test(src) ? { type: "video", mediaUrl: src } : null;
+}
+
 function classifyPost(el) {
   const postType = el.getAttribute("post-type") || "";
   const contentHref = el.getAttribute("content-href") || "";
@@ -60,36 +96,44 @@ function classifyPost(el) {
     return { type: "image", mediaUrl: contentHref };
   }
 
-  // Check content-href for direct image URLs
-  if (/\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i.test(contentHref)) {
-    return { type: "image", mediaUrl: contentHref };
-  }
-
-  // Reddit-hosted video
+  // Checked before the URL: for a Reddit-hosted video a real https src in the
+  // DOM beats the bare v.redd.it base, which costs the renderer a manifest
+  // fetch to resolve.
   if (postType === "video" || /v\.redd\.it/.test(contentHref)) {
-    // A real https video src in the DOM (e.g. packaged-media) plays directly.
-    // Reddit's own player uses blob: MSE URLs — useless outside the page.
-    const video = el.querySelector("video source, video[src]");
-    const videoSrc = video ? (video.getAttribute("src") || video.src) : null;
-    if (videoSrc && /^https?:/.test(videoSrc)) {
-      return { type: "video", mediaUrl: videoSrc };
-    }
-    // Bare v.redd.it base URL — the video renderer resolves the actual
-    // rendition from DASHPlaylist.mpd. Filenames can't be guessed: Reddit
-    // renamed DASH_<res>.mp4 to CMAF_<res>.mp4 and direct guesses 403.
-    if (contentHref.includes("v.redd.it")) {
-      return { type: "video", mediaUrl: contentHref.replace(/\/+$/, "") };
-    }
+    const direct = findPlayableVideo(el);
+    if (direct) return direct;
   }
 
-  // Check for embeddable links (redgifs, youtube, etc.)
-  const embedUrl = getEmbedUrl(contentHref);
-  if (embedUrl) {
-    // Special case: imgur mp4 is a direct video
-    if (embedUrl.endsWith(".mp4")) {
-      return { type: "video", mediaUrl: embedUrl };
+  const byHref = classifyUrl(contentHref);
+  if (byHref) return byHref;
+
+  // Some wrappers keep the media a level down — the embedded copy's own
+  // content-href, or a plain link to the host.
+  for (const node of el.querySelectorAll("[content-href], a[href]")) {
+    const href = node.getAttribute("content-href") || node.getAttribute("href") || "";
+    if (!href || href === contentHref) continue;
+    const nested = classifyUrl(href);
+    if (nested) return nested;
+  }
+
+  const embedded = findPlayableVideo(el);
+  if (embedded) return embedded;
+
+  // Crossposts point content-href at the ORIGINAL post's permalink and carry
+  // no media at all — the DOM holds only links and community icons. They used
+  // to be dropped silently. Flagged here, fetched in resolvePendingPosts.
+  if (postType === "crosspost" && /^(https?:\/\/[^/]*reddit\.com)?\/r\//.test(contentHref)) {
+    return { type: "crosspost", mediaUrl: null, crosspostHref: contentHref };
+  }
+
+  // Galleries keep their image list in the post's JSON, not the DOM. Flagged
+  // before the image fallback below, which would otherwise reduce a whole
+  // gallery to whichever preview thumbnail happened to be rendered.
+  if (postType === "gallery" || /reddit\.com\/gallery\//.test(contentHref)) {
+    const galleryHref = el.getAttribute("permalink") || contentHref;
+    if (galleryHref) {
+      return { type: "gallery", mediaUrl: null, galleryHref };
     }
-    return { type: "embed", mediaUrl: embedUrl, originalUrl: contentHref };
   }
 
   // Fallback: find best image in the post DOM
@@ -111,6 +155,9 @@ function classifyPost(el) {
 function scrapePosts() {
   const posts = [];
   const seen = new Set();
+  // Posts the classifier could not place. They are dropped from the slideshow
+  // entirely, so they are reported rather than vanishing without a trace.
+  const skipped = [];
 
   // New Reddit: <shreddit-post> elements
   document.querySelectorAll("shreddit-post").forEach((el) => {
@@ -119,7 +166,19 @@ function scrapePosts() {
     seen.add(id);
 
     const classified = classifyPost(el);
-    if (!classified) return;
+    if (!classified) {
+      // The URLs it did find are reported too: without them there is no way to
+      // tell a post with no media from one whose media is somewhere unexpected.
+      const candidates = [...el.querySelectorAll("[content-href], a[href], img[src], source[src], video[src]")]
+        .map((n) => n.getAttribute("content-href") || n.getAttribute("href") || n.getAttribute("src"))
+        .filter(Boolean)
+        .slice(0, 8);
+      skipped.push(
+        `u/${el.getAttribute("author") || "?"} post-type=${el.getAttribute("post-type") || "?"} ` +
+          `href=${el.getAttribute("content-href") || "(none)"}\n      found: ${candidates.join("\n      found: ") || "(nothing)"}`
+      );
+      return;
+    }
 
     posts.push({
       id,
@@ -131,8 +190,19 @@ function scrapePosts() {
       type: classified.type,
       mediaUrl: classified.mediaUrl,
       originalUrl: classified.originalUrl || el.getAttribute("content-href") || "",
+      // Carried only until resolvePendingPosts fills in the real media from
+      // the post's JSON, and stripped there.
+      ...(classified.crosspostHref ? { crosspostHref: classified.crosspostHref } : {}),
+      ...(classified.galleryHref ? { galleryHref: classified.galleryHref } : {}),
     });
   });
+
+  if (skipped.length) {
+    console.log(
+      `[reddit-slideshow] scraped ${posts.length} posts, skipped ${skipped.length} the classifier could not place:\n  ` +
+        skipped.join("\n  ")
+    );
+  }
 
   // Old Reddit fallback
   if (posts.length === 0) {
@@ -184,6 +254,114 @@ function scrapePosts() {
   }
 
   return posts;
+}
+
+// --- Posts whose media only exists in Reddit's JSON ---
+
+// Crossposts and galleries carry no usable media in the DOM. Their JSON is
+// same-origin from here, so the request goes out with the viewer's own cookies
+// — which is what makes it work at all for subreddits that need an account.
+// Doing this from the background would lose them.
+const JSON_TIMEOUT_MS = 8000;
+
+async function fetchPostJson(href) {
+  // Absolute, deliberately: a content script's fetch does not resolve a
+  // relative URL against the page the way the page itself would — it throws.
+  const url = new URL(href, location.origin);
+  const jsonUrl = `${url.origin}${url.pathname.replace(/\/?$/, "/")}.json?raw_json=1`;
+  const resp = await fetch(jsonUrl, {
+    credentials: "include",
+    signal: AbortSignal.timeout(JSON_TIMEOUT_MS),
+  });
+  if (!resp.ok) return null;
+
+  const data = await resp.json();
+  const child =
+    data && data[0] && data[0].data && data[0].data.children && data[0].data.children[0];
+  return child && child.data ? child.data : null;
+}
+
+// gallery_data holds the order, media_metadata the URLs. `s` is the source
+// rendition: `u` for stills, `gif`/`mp4` for animated ones.
+function galleryMediaUrls(data) {
+  const items = data && data.gallery_data && data.gallery_data.items;
+  const meta = data && data.media_metadata;
+  if (!Array.isArray(items) || !meta) return [];
+
+  return items
+    .map((item) => {
+      const entry = meta[item.media_id];
+      const source = entry && entry.s;
+      return source ? source.u || source.mp4 || source.gif || null : null;
+    })
+    .filter(Boolean);
+}
+
+// One post per image: a slideshow shows one thing at a time, so a gallery that
+// stayed a single post would show only its first image.
+function expandGallery(post, urls) {
+  const { crosspostHref, galleryHref, ...rest } = post;
+  const multiple = urls.length > 1;
+
+  return urls.map((url, i) => ({
+    ...rest,
+    id: multiple ? `${post.id}-${i + 1}` : post.id,
+    title: multiple ? `${post.title} (${i + 1}/${urls.length})` : post.title,
+    type: /\.mp4(\?|$)/i.test(url) ? "video" : "image",
+    mediaUrl: url,
+  }));
+}
+
+async function resolveCrosspost(post) {
+  try {
+    const original = await fetchPostJson(post.crosspostHref);
+    if (!original) return null;
+
+    // The original may itself be a gallery.
+    const gallery = galleryMediaUrls(original);
+    if (gallery.length) return expandGallery(post, gallery);
+
+    const classified = classifyUrl(original.url || "");
+    if (!classified) return null;
+
+    const { crosspostHref, ...rest } = post;
+    return { ...rest, ...classified };
+  } catch (e) {
+    // Unreachable or not JSON — the post is dropped rather than shown broken
+    return null;
+  }
+}
+
+async function resolveGallery(post) {
+  try {
+    const data = await fetchPostJson(post.galleryHref);
+    if (!data) return null;
+
+    const urls = galleryMediaUrls(data);
+    if (!urls.length) return null;
+
+    return expandGallery(post, urls);
+  } catch (e) {
+    return null;
+  }
+}
+
+async function resolvePendingPosts(posts) {
+  const resolved = await Promise.all(
+    posts.map((post) => {
+      if (post.type === "crosspost") return resolveCrosspost(post);
+      if (post.type === "gallery") return resolveGallery(post);
+      return post;
+    })
+  );
+
+  // flat(): a gallery resolves to one post per image.
+  const kept = resolved.filter(Boolean).flat();
+  const lost = posts.filter(
+    (p, i) => (p.type === "crosspost" || p.type === "gallery") && !resolved[i]
+  ).length;
+  if (lost) console.log(`[reddit-slideshow] ${lost} post(s) could not be resolved from JSON`);
+  return kept;
 }
 
 // --- Scroll to load more ---
@@ -279,13 +457,13 @@ browser.runtime.onMessage.addListener((message) => {
 });
 
 async function handleScrapeAndStart() {
-  const posts = scrapePosts();
+  const posts = await resolvePendingPosts(scrapePosts());
   createOverlay();
   return { success: true, posts };
 }
 
 async function handleLoadMore() {
-  const posts = await scrollAndScrape();
+  const posts = await resolvePendingPosts(await scrollAndScrape());
   return { posts };
 }
 

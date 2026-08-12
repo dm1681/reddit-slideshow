@@ -82,6 +82,7 @@ const VideoRenderer = {
     let autoMuted = silent;
     let soundHint = null;
     let gestureHandler = null;
+    let errorTimer = null;
 
     function clearSoundHint() {
       if (soundHint) {
@@ -148,12 +149,21 @@ const VideoRenderer = {
     });
 
     function showError() {
+      // Teardown sets src="" on the outgoing <video>, and Firefox reports that
+      // as an error a tick later — by which time the container already holds
+      // the next slide. Reporting it then would wipe the post the viewer just
+      // moved to.
+      if (cancelled) return;
       spinner.remove();
       const errDiv = document.createElement("div");
       errDiv.style.cssText = "color:#777;font-size:14px;";
       errDiv.textContent = "Failed to load video";
       container.innerHTML = "";
       container.appendChild(errDiv);
+
+      // A video that never loads never fires `ended`, so auto-advance would
+      // stop here for good. Same 2s grace the image renderer gives an error.
+      if (onEnded) errorTimer = setTimeout(onEnded, 2000);
     }
 
     video.addEventListener("loadeddata", () => {
@@ -193,6 +203,9 @@ const VideoRenderer = {
 
     return () => {
       cancelled = true;
+      // Cleared with the renderer: an advance queued by a dead slide would
+      // skip whatever replaced it.
+      if (errorTimer) clearTimeout(errorTimer);
       clearSoundHint();
       video.pause();
       video.src = "";

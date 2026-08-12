@@ -36,8 +36,11 @@ const EmbedRenderer = {
       startFallbackTimer();
     });
 
-    // If iframe doesn't fire load within 5s, show it anyway and start timer
-    setTimeout(() => {
+    // If iframe doesn't fire load within 5s, show it anyway and start timer.
+    // Kept so teardown can cancel it: a redgifs embed swapped out for its
+    // resolved video would otherwise arm the advance timer from beyond the
+    // grave and skip a slide the viewer is watching.
+    const revealTimer = setTimeout(() => {
       if (spinner.parentNode) {
         spinner.remove();
         iframe.style.opacity = "1";
@@ -49,6 +52,10 @@ const EmbedRenderer = {
 
     if (onEnded) {
       messageHandler = (event) => {
+        // Only this player's own events count. Reddit's page scripts and any
+        // other frame post messages too, and one that happened to look like an
+        // end event would advance a slide out from under the viewer.
+        if (event.source !== iframe.contentWindow) return;
         try {
           const data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
           if (data.event === "onStateChange" && data.info === 0) { advance(); return; }
@@ -61,6 +68,8 @@ const EmbedRenderer = {
     }
 
     return () => {
+      advanced = true; // nothing from this teardown renderer may advance
+      clearTimeout(revealTimer);
       if (timer) clearTimeout(timer);
       if (messageHandler) window.removeEventListener("message", messageHandler);
       iframe.src = "about:blank";
