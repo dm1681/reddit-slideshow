@@ -32,7 +32,11 @@ async function resolveRedgifsUrl(id) {
   });
   if (!resp.ok) return null;
   const data = await resp.json();
-  return (data.gif && data.gif.urls && (data.gif.urls.hd || data.gif.urls.sd)) || null;
+  const gif = data.gif;
+  if (!gif || !gif.urls) return null;
+  // `hd`/`sd` carry the audio track; the `silent` rendition is the muted cut.
+  const url = gif.urls.hd || gif.urls.sd;
+  return url ? { url, hasAudio: gif.hasAudio !== false } : null;
 }
 
 // --- Resolve embed posts to direct video URLs ---
@@ -43,9 +47,9 @@ async function resolvePost(post) {
     const match = post.originalUrl.match(/redgifs\.com\/(?:watch|ifr)\/(\w+)/i);
     if (match) {
       try {
-        const mp4Url = await resolveRedgifsUrl(match[1]);
-        if (mp4Url) {
-          return { ...post, type: "video", mediaUrl: mp4Url };
+        const resolved = await resolveRedgifsUrl(match[1]);
+        if (resolved) {
+          return { ...post, type: "video", mediaUrl: resolved.url, hasAudio: resolved.hasAudio };
         }
       } catch (e) {
         // API failed — keep as embed fallback
@@ -117,6 +121,14 @@ async function doStartSlideshow() {
           if (session === sess) {
             session.posts = resolved;
             console.log("[reddit-slideshow] resolved posts:", resolved.length, "types:", resolved.map(p => p.type).join(","));
+            // The slideshow snapshots posts when it loads, which happens before
+            // this resolution lands — without the push it would keep showing
+            // redgifs through the muted embed player for the whole first batch.
+            browser.runtime
+              .sendMessage({ type: "postsUpdated", posts: resolved })
+              .catch(() => {
+                // No slideshow listening (closed or not open yet) — harmless
+              });
           }
         })
         .catch((e) => {

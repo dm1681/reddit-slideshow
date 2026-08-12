@@ -67,6 +67,29 @@
     }
   }
 
+  // --- Background push: posts resolved after this page snapshotted them ---
+  // Redgifs embeds become direct videos here. Re-render only when the post on
+  // screen actually changed, so a background update never restarts playback of
+  // something the user is already watching.
+  browser.runtime.onMessage.addListener((message) => {
+    if (message.type !== "postsUpdated" || !Array.isArray(message.posts)) return;
+
+    const before = posts[currentIndex];
+    posts = message.posts;
+    const after = posts[currentIndex];
+
+    const changed =
+      before && after && before.id === after.id &&
+      (before.type !== after.type || before.mediaUrl !== after.mediaUrl);
+
+    if (changed) {
+      renderCurrentPost();
+    } else {
+      updateProgress();
+      updateNavButtons();
+    }
+  });
+
   // --- Rendering ---
   function renderCurrentPost() {
     const post = posts[currentIndex];

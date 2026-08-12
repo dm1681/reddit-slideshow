@@ -39,11 +39,14 @@ const REDGIFS_LATENCY_MS = 150;
 
 function buildHarness({ scrapeDelayMs = 0 } = {}) {
   const listeners = [];
+  const broadcasts = [];
 
   const browser = {
     runtime: {
       onMessage: { addListener: (fn) => listeners.push(fn) },
       getURL: (p) => `moz-extension://test/${p}`,
+      // Extension-wide broadcast to the open slideshow page
+      sendMessage: async (msg) => { broadcasts.push(msg); },
     },
     tabs: {
       query: async () => [{ id: 1 }],
@@ -68,7 +71,9 @@ function buildHarness({ scrapeDelayMs = 0 } = {}) {
     if (url.includes("/v2/gifs/")) {
       return {
         ok: true,
-        json: async () => ({ gif: { urls: { hd: "https://media.redgifs.com/abc.mp4" } } }),
+        json: async () => ({
+          gif: { hasAudio: true, urls: { hd: "https://media.redgifs.com/abc.mp4" } },
+        }),
       };
     }
     return { ok: false, json: async () => ({}) };
@@ -85,7 +90,7 @@ function buildHarness({ scrapeDelayMs = 0 } = {}) {
     throw new Error(`Expected 1 onMessage listener, got ${listeners.length}`);
   }
   const dispatch = (msg) => listeners[0](msg, { tab: { id: 1 } });
-  return { dispatch };
+  return { dispatch, broadcasts };
 }
 
 let passed = 0;
@@ -159,6 +164,34 @@ async function main() {
     assert(
       redgifsPost && redgifsPost.type === "video" && redgifsPost.mediaUrl.endsWith(".mp4"),
       `Redgifs post resolved to direct MP4 (got type=${redgifsPost && redgifsPost.type}, url=${redgifsPost && redgifsPost.mediaUrl})`
+    );
+    assert(
+      redgifsPost && redgifsPost.hasAudio === true,
+      "Resolved post carries hasAudio from the redgifs API"
+    );
+  }
+
+  // ================================================================
+  // TEST 4: resolved posts are pushed to the already-open slideshow
+  // ================================================================
+  // The slideshow snapshots posts when it loads — before resolution lands. With
+  // no push it kept rendering redgifs through the muted embed player until a
+  // preemptive refill happened to replace the list.
+  console.log("\nTest: resolved posts are broadcast to the open slideshow");
+  {
+    const { dispatch, broadcasts } = buildHarness();
+
+    await dispatch({ type: "startSlideshow" });
+    assert(broadcasts.length === 0, "No broadcast before resolution completes");
+
+    await sleep(REDGIFS_LATENCY_MS * 2 + 100);
+
+    const update = broadcasts.find((m) => m.type === "postsUpdated");
+    assert(!!update, "postsUpdated broadcast sent after resolution");
+    const pushed = update && update.posts.find((p) => p.id === "t3_aaa");
+    assert(
+      pushed && pushed.type === "video",
+      `Broadcast carries the resolved video post (got type=${pushed && pushed.type})`
     );
   }
 

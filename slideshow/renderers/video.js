@@ -28,6 +28,33 @@ async function resolveVredditUrl(baseUrl) {
   return best ? `${base}/${best.file}` : null;
 }
 
+// Every post gets a fresh <video>, so the user's volume choice has to live
+// outside the element or they'd be unmuting on every single slide.
+const AUDIO_PREF_KEY = "reddit-slideshow.audio";
+
+const audioPref = (function loadAudioPref() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(AUDIO_PREF_KEY));
+    if (stored) {
+      return {
+        muted: stored.muted === true,
+        volume: typeof stored.volume === "number" ? Math.min(1, Math.max(0, stored.volume)) : 1,
+      };
+    }
+  } catch (e) {
+    // No storage (or corrupt value) — sound on is the sane default
+  }
+  return { muted: false, volume: 1 };
+})();
+
+function saveAudioPref() {
+  try {
+    localStorage.setItem(AUDIO_PREF_KEY, JSON.stringify(audioPref));
+  } catch (e) {
+    // Storage unavailable — the preference still holds for this session
+  }
+}
+
 const VideoRenderer = {
   render(post, container, onEnded) {
     container.innerHTML = "";
@@ -38,13 +65,87 @@ const VideoRenderer = {
 
     const video = document.createElement("video");
     video.controls = true;
-    video.autoplay = true;
     video.loop = !onEnded; // Only loop if auto-advance is off
-    video.muted = false;
+    video.muted = audioPref.muted;
+    video.volume = audioPref.volume;
     video.playsInline = true;
     video.style.cssText = "max-width:100%;max-height:100%;object-fit:contain;opacity:0;transition:opacity 0.3s ease;";
 
+    // A post known to carry no audio track starts muted so the browser's
+    // audible-autoplay block never kicks in for a silent clip.
+    const silent = post.hasAudio === false;
+    if (silent) video.muted = true;
+
     let cancelled = false;
+    // True while the mute was imposed by us (silent clip or autoplay policy)
+    // rather than chosen by the user — never write that back to the preference.
+    let autoMuted = silent;
+    let soundHint = null;
+    let gestureHandler = null;
+
+    function clearSoundHint() {
+      if (soundHint) {
+        soundHint.remove();
+        soundHint = null;
+      }
+      if (gestureHandler) {
+        document.removeEventListener("pointerdown", gestureHandler);
+        document.removeEventListener("keydown", gestureHandler);
+        gestureHandler = null;
+      }
+    }
+
+    // Firefox blocks audible autoplay until the page has seen a user gesture.
+    // Rather than leave the video paused, play it muted and restore sound on
+    // the next click or keypress — so the user unmutes at most once per page.
+    function restoreSoundOnGesture() {
+      if (gestureHandler) return;
+
+      soundHint = document.createElement("div");
+      soundHint.textContent = "🔇 Click or press a key for sound";
+      soundHint.style.cssText =
+        // 72px clears the top bar; absolute offsets ignore the container padding.
+        "position:absolute;top:72px;left:50%;transform:translateX(-50%);" +
+        "background:rgba(0,0,0,0.75);color:#eee;font-size:13px;padding:6px 12px;" +
+        "border-radius:4px;pointer-events:none;z-index:5;";
+      container.appendChild(soundHint);
+
+      gestureHandler = (event) => {
+        // Clicks on the player's own controls are left alone: unmuting here
+        // first would let the native mute toggle flip it right back.
+        if (event.target === video) return;
+        clearSoundHint();
+        if (cancelled) return;
+        autoMuted = false;
+        video.muted = audioPref.muted;
+        video.volume = audioPref.volume;
+        video.play().catch(() => {});
+      };
+      document.addEventListener("pointerdown", gestureHandler);
+      document.addEventListener("keydown", gestureHandler);
+    }
+
+    function attemptPlay() {
+      const started = video.play();
+      if (!started || typeof started.catch !== "function") return;
+      started.catch(() => {
+        if (cancelled || video.muted) return;
+        autoMuted = true;
+        video.muted = true;
+        video.play().catch(() => {});
+        restoreSoundOnGesture();
+      });
+    }
+
+    video.addEventListener("volumechange", () => {
+      // Ignore the mute we imposed ourselves; anything else is the user's call.
+      if (autoMuted && video.muted) return;
+      autoMuted = false;
+      clearSoundHint();
+      audioPref.muted = video.muted;
+      audioPref.volume = video.volume;
+      saveAudioPref();
+    });
 
     function showError() {
       spinner.remove();
@@ -58,6 +159,9 @@ const VideoRenderer = {
     video.addEventListener("loadeddata", () => {
       spinner.remove();
       video.style.opacity = "1";
+      // Played explicitly instead of via the autoplay attribute, so a blocked
+      // start surfaces as a rejected promise we can fall back from.
+      attemptPlay();
     });
 
     video.addEventListener("error", showError);
@@ -89,6 +193,7 @@ const VideoRenderer = {
 
     return () => {
       cancelled = true;
+      clearSoundHint();
       video.pause();
       video.src = "";
       container.innerHTML = "";
