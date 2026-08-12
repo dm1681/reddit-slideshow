@@ -8,11 +8,13 @@
     "test": "test"
   },
   "scripts": {
-    "test": "node test/test-scraping.js && node test/test-integration.js && node test/test-start-race.js && node test/test-vreddit.js",
+    "test": "node test/test-scraping.js && node test/test-integration.js && node test/test-start-race.js && node test/test-vreddit.js && node test/test-audio-continuity.js",
     "lint": "web-ext lint --source-dir .",
     "build": "web-ext build --source-dir .",
     "sign": "web-ext sign --source-dir . --channel unlisted",
     "start": "web-ext run --source-dir .",
+    "start:zen": "bash scripts/run-zen.sh",
+    "zen:eval": "node scripts/zen-eval.js",
     "bump": "node scripts/bump-version.js",
     "update-manifest": "node scripts/make-update-manifest.js"
   },
