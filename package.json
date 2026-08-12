@@ -8,7 +8,7 @@
     "test": "test"
   },
   "scripts": {
-    "test": "node test/test-scraping.js && node test/test-integration.js && node test/test-start-race.js && node test/test-vreddit.js && node test/test-audio-continuity.js",
+    "test": "node test/test-scraping.js && node test/test-integration.js && node test/test-start-race.js && node test/test-vreddit.js && node test/test-audio-continuity.js && node test/test-auto-advance.js",
     "lint": "web-ext lint --source-dir .",
     "build": "web-ext build --source-dir .",
     "sign": "web-ext sign --source-dir . --channel unlisted",
