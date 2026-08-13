@@ -18,7 +18,9 @@ jobs:
           cache: npm
 
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
+      # Firefox as well as chromium: the audio and auto-advance suites run in
+      # the browser the extension actually ships to.
+      - run: npx playwright install --with-deps chromium firefox
       - run: npm test
 
       # Catches AMO validation errors here rather than at signing time, when a
