@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Cinema — popup</title>
+<style>
+
+  html, body { margin: 0; padding: 0; overflow: hidden; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #000;
+    color: #F5F2ED;
+    -webkit-font-smoothing: antialiased;
+    font-variant-numeric: tabular-nums;
+  }
+  .micro {
+    font-size: 10px; font-weight: 700; letter-spacing: .18em;
+    text-transform: uppercase; color: #8B8378;
+  }
+
+
+  :root {
+    --amber:   #FFC24B;
+    --amber-d: #C98F1F;
+    --up:      #FF6338;
+    --paper:   #F7F4EF;
+    --paper-2: #BEB7AC;
+    --paper-3: #8B8378;
+    --glass:   rgba(16,15,14,.72);
+    --hair:    rgba(255,255,255,.11);
+    --hair-2:  rgba(255,255,255,.06);
+  }
+
+  body { width: 360px; height: 520px; position: relative; background: #0A0908; font-size: 13px; }
+  .glow {
+    position: absolute; top: -150px; left: 50%; transform: translateX(-50%);
+    width: 430px; height: 300px; pointer-events: none;
+    background: radial-gradient(50% 50% at 50% 50%, rgba(255,194,75,.17) 0%, rgba(255,194,75,0) 72%);
+  }
+  .wrap { position: absolute; inset: 0; padding: 18px 20px; display: flex; flex-direction: column; }
+
+  .head { display: flex; align-items: center; gap: 8px; height: 20px; margin-bottom: 16px; flex: none; }
+  .lamp { width: 7px; height: 7px; border-radius: 50%; flex: none;
+          background: var(--amber); box-shadow: 0 0 10px rgba(255,194,75,.9); }
+  .head .name { font-size: 10.5px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; color: var(--paper); }
+  .head .ver { margin-left: auto; font-size: 10px; font-weight: 600; letter-spacing: .1em; color: #6E675E; }
+
+  .now {
+    flex: none; border: 1px solid rgba(255,255,255,.10); border-left: 2px solid var(--amber);
+    border-radius: 8px; padding: 13px 14px; margin-bottom: 14px;
+    background: linear-gradient(180deg, rgba(255,194,75,.08), rgba(255,255,255,.02));
+  }
+  .now .lab { font-size: 9.5px; font-weight: 700; letter-spacing: .19em; text-transform: uppercase; color: var(--amber-d); }
+  .now .src { margin-top: 6px; font-size: 21px; font-weight: 650; letter-spacing: -.02em; color: var(--paper); line-height: 1.1; }
+  .now .cnt { margin-top: 8px; font-size: 11.5px; color: var(--paper-2); font-weight: 500; line-height: 1.35; }
+  .now .cnt b { color: var(--paper); font-weight: 700; }
+  .now .cnt s { text-decoration: none; color: #6E675E; }
+
+  .seclab {
+    flex: none; font-size: 9.5px; font-weight: 700; letter-spacing: .19em;
+    text-transform: uppercase; color: var(--paper-3); height: 12px; margin-bottom: 8px;
+  }
+
+  .row {
+    flex: none; height: 46px; display: flex; align-items: center; gap: 10px; padding: 0 12px;
+    border-radius: 8px; background: rgba(255,255,255,.035); border: 1px solid rgba(255,255,255,.07);
+  }
+  .row + .row { margin-top: 8px; }
+  .row .k { font-size: 12.5px; font-weight: 600; color: var(--paper); line-height: 1.15; }
+  .row .k i { display: block; font-style: normal; font-size: 10.5px; font-weight: 500;
+              color: var(--paper-3); margin-top: 3px; }
+  .row .sp { margin-left: auto; flex: none; }
+
+  .toggle {
+    width: 38px; height: 22px; border-radius: 11px; position: relative; flex: none;
+    background: rgba(255,194,75,.88); box-shadow: inset 0 0 0 1px rgba(255,255,255,.14);
+  }
+  .toggle::after { content:""; position:absolute; top:3px; right:3px; width:16px; height:16px;
+                   border-radius:50%; background:#17130C; }
+
+  .seg { display: flex; border-radius: 7px; overflow: hidden; border: 1px solid rgba(255,255,255,.12); }
+  .seg b {
+    padding: 0 7px; height: 26px; display: flex; align-items: center;
+    font-size: 10.5px; font-weight: 700; color: var(--paper-2); background: rgba(255,255,255,.04);
+  }
+  .seg b + b { border-left: 1px solid rgba(255,255,255,.09); }
+  .seg b.sel { background: var(--amber); color: #17130C; }
+
+  .start {
+    flex: none; height: 54px; width: 100%; margin-top: 14px; margin-bottom: 12px;
+    border: 0; border-radius: 9px; cursor: pointer; font-family: inherit;
+    background: linear-gradient(180deg, #FFCF6B, #F2A92F); color: #1A1206;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    box-shadow: 0 6px 22px rgba(255,178,60,.22);
+  }
+  .start .t { font-size: 15px; font-weight: 700; letter-spacing: -.01em; }
+  .start .s { font-size: 10.5px; font-weight: 600; opacity: .74; margin-top: 3px; }
+
+  .keys {
+    flex: none; border: 1px solid rgba(255,255,255,.08); border-radius: 8px;
+    padding: 11px 12px; background: rgba(255,255,255,.025);
+  }
+  .keys .lab { font-size: 9.5px; font-weight: 700; letter-spacing: .19em; text-transform: uppercase;
+               color: var(--paper-3); margin-bottom: 10px; }
+  .keys .kr { display: flex; align-items: center; gap: 6px; height: 18px;
+              font-size: 11px; color: var(--paper-2); white-space: nowrap; }
+  .keys .kr + .kr { margin-top: 7px; }
+  .keys .sep { width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,.2); flex: none; margin: 0 2px; }
+  kbd {
+    font-family: inherit; font-size: 10px; font-weight: 700; color: var(--paper); flex: none;
+    background: rgba(255,255,255,.09); border: 1px solid rgba(255,255,255,.15);
+    border-radius: 4px; padding: 2px 5px; min-width: 18px; text-align: center; line-height: 1.1;
+  }
+
+  .foot { margin-top: auto; display: flex; align-items: center; gap: 7px;
+          font-size: 10.5px; color: var(--paper-3); white-space: nowrap; }
+  .foot .ok { color: #6ED09A; font-size: 10px; }
+  .foot b { color: var(--paper-2); font-weight: 650; }
+</style></head>
+<body>
+  <div class="glow"></div>
+  <div class="wrap">
+
+    <div class="head">
+      <i class="lamp"></i>
+      <span class="name">Reddit Slideshow</span>
+      <span class="ver">0.2.0</span>
+    </div>
+
+    <div class="now">
+      <div class="lab">Now showing</div>
+      <div class="src">r/EarthPorn</div>
+      <div class="cnt"><b>43 frames</b> ready on this page &middot; <s>5 skipped, no media</s></div>
+    </div>
+
+    <div class="seclab">Before the reel starts</div>
+
+    <div class="row">
+      <div class="k">Blur NSFW &amp; spoilers<i>Press X to reveal a frame</i></div>
+      <div class="sp"><div class="toggle"></div></div>
+    </div>
+
+    <div class="row">
+      <div class="k">Auto-advance<i>Videos play to the end</i></div>
+      <div class="sp seg"><b>Off</b><b>4s</b><b class="sel">8s</b><b>15s</b></div>
+    </div>
+
+    <button class="start">
+      <span class="t">Start the reel</span>
+      <span class="s">43 frames &middot; r/EarthPorn &middot; Hot</span>
+    </button>
+
+    <div class="keys">
+      <div class="lab">Once it&rsquo;s running</div>
+      <div class="kr">
+        <kbd>&#8592;</kbd><kbd>&#8594;</kbd><span>Move</span>
+        <i class="sep"></i><kbd>Space</kbd><span>Auto</span>
+        <i class="sep"></i><kbd>?</kbd><span>The reel</span>
+      </div>
+      <div class="kr">
+        <kbd>&#8593;</kbd><kbd>&#8595;</kbd><span>Vote</span>
+        <i class="sep"></i><kbd>S</kbd><span>Save</span>
+        <i class="sep"></i><kbd>Esc</kbd><span>Close</span>
+      </div>
+    </div>
+
+    <div class="foot"><span class="ok">&#9679;</span> Signed in as <b>u/example_user</b> &mdash; votes are live</div>
+
+  </div>
+</body></html>

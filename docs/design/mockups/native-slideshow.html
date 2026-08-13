@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Reddit Slideshow — Native</title>
+<style>
+  html, body { margin:0; padding:0; overflow:hidden; }
+  *, *::before, *::after { box-sizing: border-box; }
+
+  :root{
+    --stage:#080b0d;
+    --rail:#0f1417;
+    --card:#171d21;
+    --card2:#1d2429;
+    --line:#242c31;
+    --line2:#333e45;
+    --text:#e9eef0;
+    --dim:#9aabb3;
+    --dim2:#78888f;
+    --orange:#ff4a12;
+    --orange-soft:#ff7043;
+    --blue:#7b93ff;
+    --amber:#ffb524;
+    --green:#3fcf8e;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+
+  body{
+    width:1440px; height:900px;
+    background:var(--rail);
+    color:var(--text);
+    font-family:var(--font);
+    -webkit-font-smoothing:antialiased;
+  }
+
+  .app{ display:flex; width:1440px; height:900px; }
+
+  /* ============ STAGE ============ */
+  .stage{
+    position:relative;
+    width:1040px; height:900px;
+    background:var(--stage);
+    padding:20px 22px;
+    display:flex; flex-direction:column;
+    overflow:hidden;
+  }
+  .ambient{
+    position:absolute; inset:-8%;
+    width:116%; height:116%;
+    object-fit:cover;
+    filter:blur(56px) saturate(150%) brightness(.52);
+    transform:scale(1.06);
+  }
+  .ambient-veil{
+    position:absolute; inset:0;
+    background:
+      radial-gradient(120% 90% at 50% 45%, rgba(0,0,0,.18) 0%, rgba(0,0,0,.68) 68%, rgba(0,0,0,.86) 100%),
+      linear-gradient(to bottom, rgba(8,11,13,.75) 0%, rgba(8,11,13,0) 16%, rgba(8,11,13,0) 72%, rgba(8,11,13,.86) 100%);
+  }
+
+  /* --- stage bar --- */
+  .stagebar{
+    position:relative; z-index:3;
+    height:34px; flex:0 0 34px;
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .metabadges{ display:flex; align-items:center; gap:8px; }
+  .badge{
+    display:inline-flex; align-items:center; gap:6px;
+    height:26px; padding:0 9px;
+    border-radius:7px;
+    background:rgba(10,14,16,.62);
+    border:1px solid rgba(255,255,255,.12);
+    backdrop-filter:blur(8px);
+    font-size:11.5px; font-weight:600; letter-spacing:.045em;
+    color:#cdd9de; text-transform:uppercase;
+  }
+  .badge .sep{ opacity:.34; font-weight:400; }
+  .badge .plain{ text-transform:none; letter-spacing:0; font-weight:500; color:#a7b6bc; }
+  .badge svg{ display:block; }
+
+  .stagetools{ display:flex; align-items:center; gap:8px; }
+  .seg{
+    display:flex; height:26px; padding:2px;
+    background:rgba(10,14,16,.62);
+    border:1px solid rgba(255,255,255,.12);
+    border-radius:7px; backdrop-filter:blur(8px);
+  }
+  .seg button{
+    font:inherit; border:0; cursor:pointer;
+    padding:0 10px; border-radius:5px;
+    background:transparent; color:#93a3aa;
+    font-size:11px; font-weight:700; letter-spacing:.07em;
+  }
+  .seg button.on{ background:rgba(255,255,255,.14); color:#fff; }
+  .iconbtn{
+    width:28px; height:28px; display:grid; place-items:center;
+    border-radius:7px; cursor:pointer;
+    background:rgba(10,14,16,.62);
+    border:1px solid rgba(255,255,255,.12);
+    color:#b6c4ca; backdrop-filter:blur(8px);
+  }
+  .iconbtn.danger{ color:#ff8f6d; }
+
+  /* --- media --- */
+  .media-area{
+    position:relative; z-index:2;
+    flex:1 1 auto;
+    display:flex; align-items:center; justify-content:center;
+    margin:14px 0;
+    min-height:0;
+  }
+  .frame{
+    position:relative; margin:0; height:100%;
+    aspect-ratio:600 / 900;
+    display:flex; border-radius:11px; overflow:hidden;
+    border:1px solid rgba(255,255,255,.11);
+    box-shadow:0 28px 70px rgba(0,0,0,.62), 0 2px 10px rgba(0,0,0,.5);
+  }
+  .frame > img{ display:block; width:100%; height:100%; object-fit:cover; }
+  .dwell{
+    position:absolute; left:0; bottom:0; height:3px; width:56%;
+    background:linear-gradient(90deg,#ff4a12,#ff8a4c);
+    box-shadow:0 0 12px rgba(255,74,18,.6);
+  }
+  .dwell::after{
+    content:""; position:absolute; left:0; right:0; bottom:0; top:0;
+  }
+  .frame .ratio{
+    position:absolute; right:8px; bottom:9px;
+    font-size:10.5px; font-weight:700; letter-spacing:.06em;
+    color:#dbe4e8; background:rgba(6,9,11,.66);
+    border:1px solid rgba(255,255,255,.13);
+    padding:3px 7px; border-radius:6px;
+  }
+
+  .nav{
+    position:absolute; top:50%; transform:translateY(-50%);
+    width:46px; height:92px; display:grid; place-items:center;
+    border-radius:12px; cursor:pointer;
+    background:rgba(10,14,16,.55);
+    border:1px solid rgba(255,255,255,.13);
+    color:#e4ecef; backdrop-filter:blur(6px);
+  }
+  .nav.prev{ left:0; }
+  .nav.next{ right:0; }
+
+  /* --- filmstrip --- */
+  .filmstrip{
+    position:relative; z-index:3;
+    flex:0 0 76px; height:76px;
+    display:flex; align-items:stretch; gap:10px;
+  }
+  .tile{
+    position:relative; width:112px; height:76px; flex:0 0 112px;
+    border-radius:8px; overflow:hidden;
+    border:1px solid rgba(255,255,255,.1);
+    background:#11171a;
+    opacity:.52;
+  }
+  .tile img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .tile.done{ opacity:.34; }
+  .tile.done::after{
+    content:""; position:absolute; inset:0; background:rgba(6,9,11,.45);
+  }
+  .tile.cur{
+    opacity:1;
+    border-color:var(--orange);
+    box-shadow:0 0 0 2px rgba(255,74,18,.4), 0 6px 18px rgba(0,0,0,.5);
+  }
+  .tile .num{
+    position:absolute; left:5px; top:5px;
+    font-size:10px; font-weight:700; color:#e6eef1;
+    background:rgba(6,9,11,.72); border-radius:4px; padding:1px 5px;
+    letter-spacing:.03em;
+  }
+  .tile .kind{
+    position:absolute; right:5px; bottom:5px;
+    width:16px; height:16px; border-radius:4px;
+    background:rgba(6,9,11,.72); display:grid; place-items:center; color:#cfdadf;
+  }
+  .tile.nsfw .blurwrap{ position:absolute; inset:0; overflow:hidden; }
+  .tile.nsfw img{ filter:blur(11px) brightness(.6) saturate(.5); transform:scale(1.2); }
+  .tile.nsfw .tag{
+    position:absolute; inset:0; display:grid; place-items:center;
+  }
+  .tile.nsfw .tag span{
+    font-size:9.5px; font-weight:800; letter-spacing:.1em;
+    color:#ffdad0; background:rgba(217,58,0,.82);
+    border:1px solid rgba(255,120,80,.6);
+    padding:3px 6px; border-radius:5px;
+  }
+  .tile.more{
+    display:grid; place-items:center; opacity:.9;
+    border-style:dashed; border-color:rgba(255,255,255,.16);
+    background:
+      repeating-linear-gradient(135deg, rgba(255,255,255,.035) 0 6px, transparent 6px 12px);
+  }
+  .tile.more div{
+    text-align:center; font-size:10px; line-height:1.35; color:#8b9aa1;
+    font-weight:600; letter-spacing:.03em;
+  }
+  .dots{ display:inline-flex; gap:3px; margin-bottom:4px; }
+  .dots i{ width:4px; height:4px; border-radius:50%; background:#5d6d74; display:block; }
+  .dots i:nth-child(2){ background:#8b9aa1; }
+  .dots i:nth-child(3){ background:#c2ced3; }
+
+  /* ============ RAIL ============ */
+  .rail{
+    width:400px; height:900px; flex:0 0 400px;
+    background:var(--rail);
+    border-left:1px solid var(--line);
+    padding:20px 22px 18px;
+    display:flex; flex-direction:column;
+    overflow:hidden;
+  }
+
+  .eyebrow{
+    font-size:10.5px; font-weight:750; letter-spacing:.13em;
+    text-transform:uppercase; color:#7d8f97;
+  }
+
+  /* queue */
+  .queuehead{ display:flex; align-items:baseline; justify-content:space-between; }
+  .queuehead .pos{ font-size:12.5px; color:#b7c6cc; font-weight:600; font-variant-numeric:tabular-nums; }
+  .queuehead .pos b{ color:#fff; font-weight:700; font-size:14px; }
+  .qtrack{
+    display:flex; align-items:center; gap:5px; margin-top:9px; height:6px;
+  }
+  .qloaded{
+    position:relative; flex:1 1 auto; height:6px; border-radius:3px;
+    background:#232b30; overflow:hidden;
+  }
+  .qloaded i{
+    position:absolute; left:0; top:0; bottom:0; width:23%;
+    background:linear-gradient(90deg,#ff4a12,#ff7a45); border-radius:3px;
+  }
+  .qopen{
+    flex:0 0 62px; height:6px; border-radius:3px;
+    background:repeating-linear-gradient(115deg, #2b343a 0 4px, #1a2126 4px 8px);
+  }
+  .qnote{
+    margin-top:8px; display:flex; align-items:center; gap:6px;
+    font-size:11.5px; color:#8b9ba2;
+  }
+  .pulse{ width:6px; height:6px; border-radius:50%; background:var(--green); box-shadow:0 0 0 3px rgba(63,207,142,.16); }
+
+  .rule{ height:1px; background:var(--line); margin:16px 0; }
+
+  /* identity */
+  .who{ display:flex; align-items:center; gap:10px; }
+  .av{
+    width:34px; height:34px; flex:0 0 34px; border-radius:50%;
+    background:linear-gradient(140deg,#2f6d4f,#8bc38a 55%,#e8c98a);
+    display:grid; place-items:center;
+    font-size:13px; font-weight:800; color:#0d1a13;
+    border:1px solid rgba(255,255,255,.14);
+  }
+  .whotxt{ min-width:0; }
+  .subline{ display:flex; align-items:center; gap:6px; }
+  .subname{ font-size:14.5px; font-weight:700; color:#fff; letter-spacing:-.01em; }
+  .dot{ width:3px; height:3px; border-radius:50%; background:#5f6f76; }
+  .age{ font-size:12px; color:#8b9ba2; font-variant-numeric:tabular-nums; }
+  .byline{ font-size:12px; color:#8b9ba2; margin-top:2px; }
+  .byline b{ color:#a9bac1; font-weight:600; }
+
+  h1.title{
+    margin:14px 0 0;
+    font-size:21px; line-height:1.3; font-weight:650; letter-spacing:-.015em;
+    color:#f2f6f7;
+    display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden;
+    user-select:text;
+  }
+
+  .chips{ display:flex; gap:6px; margin-top:12px; flex-wrap:wrap; }
+  .chip{
+    font-size:11px; font-weight:650; letter-spacing:.02em;
+    padding:4px 9px; border-radius:999px;
+    background:#1d2a2f; color:#9fd0e0; border:1px solid #2b4048;
+  }
+  .chip.oc{ background:#1f2a20; color:#93d29a; border-color:#2f4633; }
+
+  /* actions */
+  .actions{ display:flex; gap:8px; margin-top:16px; }
+  .votepill{
+    display:flex; align-items:center; height:40px;
+    border-radius:20px; padding:0 4px;
+    background:rgba(255,74,18,.13);
+    border:1px solid rgba(255,74,18,.5);
+  }
+  .vbtn{
+    width:32px; height:32px; border:0; background:transparent; cursor:pointer;
+    display:grid; place-items:center; border-radius:50%; color:#93a3aa;
+  }
+  .vbtn.on{ color:var(--orange); }
+  .score{
+    min-width:52px; text-align:center;
+    font-size:14px; font-weight:750; color:#ff6a35;
+    font-variant-numeric:tabular-nums; letter-spacing:-.01em;
+  }
+  .abtn{
+    display:inline-flex; align-items:center; gap:7px;
+    height:40px; padding:0 13px; border-radius:20px; cursor:pointer;
+    background:#1b2226; border:1px solid var(--line2); color:#c8d5da;
+    font-family:var(--font); font-size:13px; font-weight:650;
+    font-variant-numeric:tabular-nums;
+  }
+  .abtn.saved{
+    background:rgba(255,181,36,.14);
+    border-color:rgba(255,181,36,.55);
+    color:var(--amber);
+  }
+  .abtn.focusring{
+    outline:2px solid #ff8a4c; outline-offset:2px;
+    border-color:rgba(255,138,76,.5);
+  }
+  .focusnote{
+    margin-top:9px; font-size:10px; letter-spacing:.09em; text-transform:uppercase;
+    color:#5f6e75; font-weight:700;
+  }
+
+  .permalink{
+    margin-top:10px; display:flex; align-items:center; gap:6px;
+    font-size:11.5px; color:#7f9098;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .permalink u{ text-decoration:none; border-bottom:1px solid #33424a; }
+
+  /* top comment */
+  .cbox{
+    margin-top:16px;
+    background:var(--card); border:1px solid var(--line);
+    border-radius:11px; padding:12px 13px 11px;
+  }
+  .chead{ display:flex; align-items:center; justify-content:space-between; }
+  .cwho{ margin-top:8px; display:flex; align-items:center; gap:6px; font-size:11.5px; color:#8b9ba2; }
+  .cwho b{ color:#b9c8ce; font-weight:650; }
+  .cwho .up{ color:var(--orange-soft); font-weight:700; font-variant-numeric:tabular-nums; }
+  .ctext{
+    margin-top:7px; font-size:13px; line-height:1.5; color:#c6d2d7;
+    display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden;
+    user-select:text;
+  }
+  .cmore{
+    margin-top:10px; display:inline-flex; align-items:center; gap:6px;
+    font-size:12px; font-weight:650; color:#9fc0ff;
+  }
+
+  .spacer{ flex:1 1 auto; min-height:8px; }
+
+  /* auto-advance dock */
+  .dock{ border-top:1px solid var(--line); padding-top:14px; }
+  .autohead{ display:flex; align-items:center; justify-content:space-between; }
+  .autoleft{ display:flex; align-items:center; gap:8px; }
+  .autoleft .lbl{ font-size:13px; font-weight:700; color:#e2e9eb; }
+  .switch{
+    width:40px; height:22px; border-radius:11px; position:relative;
+    background:var(--orange); border:1px solid #ff6a3a;
+  }
+  .switch i{
+    position:absolute; top:2px; right:2px; width:16px; height:16px;
+    border-radius:50%; background:#fff; display:block;
+  }
+  .countrow{ display:flex; align-items:center; gap:10px; margin-top:11px; }
+  .ctrack{ flex:1 1 auto; height:5px; border-radius:3px; background:#232b30; overflow:hidden; }
+  .ctrack i{ display:block; height:100%; width:56%; border-radius:3px; background:linear-gradient(90deg,#ff4a12,#ff8a4c); }
+  .csecs{ font-size:12px; font-weight:700; color:#d3dee2; font-variant-numeric:tabular-nums; min-width:56px; text-align:right; }
+  .csecs span{ color:#7f9098; font-weight:600; }
+
+  .dwellrow{ display:flex; align-items:center; justify-content:space-between; margin-top:11px; }
+  .stepper{ display:flex; align-items:center; gap:0; border:1px solid var(--line2); border-radius:8px; overflow:hidden; height:28px; }
+  .stepper button{
+    width:28px; height:26px; border:0; background:#1b2226; color:#b3c1c7;
+    font-size:14px; cursor:pointer; font-family:var(--font); line-height:1;
+  }
+  .stepper .val{
+    padding:0 10px; font-size:12px; font-weight:700; color:#e6edef;
+    font-variant-numeric:tabular-nums; background:#151b1e; line-height:26px;
+  }
+  .dwellrow .rule2{ font-size:11.5px; color:#8b9ba2; }
+  .dwellrow .rule2 b{ color:#b3c1c7; font-weight:650; }
+
+  /* legend */
+  .legend{
+    margin-top:14px; padding-top:13px; border-top:1px solid var(--line);
+    display:grid; grid-template-columns:1fr 1fr; gap:8px 14px;
+  }
+  .lg{ display:flex; align-items:center; gap:7px; font-size:11.5px; color:#8b9ba2; }
+  .k{
+    display:inline-flex; align-items:center; justify-content:center;
+    min-width:21px; height:20px; padding:0 5px;
+    border:1px solid var(--line2); border-bottom-width:2px; border-radius:5px;
+    background:#1a2126; color:#c3d0d5; font-size:10.5px; font-weight:700;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ==================== STAGE ==================== -->
+  <main class="stage">
+    <img class="ambient" src="photo-portrait.svg" alt="">
+    <div class="ambient-veil"></div>
+
+    <div class="stagebar">
+      <div class="metabadges">
+        <span class="badge">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#9fd0e0" stroke-width="1.5">
+            <rect x="1.6" y="2.6" width="12.8" height="10.8" rx="2"/>
+            <circle cx="5.6" cy="6.2" r="1.2" fill="#9fd0e0" stroke="none"/>
+            <path d="M2.2 11.4 6 8l2.6 2.3L11 8.6l3 2.9"/>
+          </svg>
+          Image
+          <span class="sep">/</span>
+          <span class="plain">i.redd.it</span>
+        </span>
+        <span class="badge"><span class="plain">1080 × 1620 · portrait</span></span>
+      </div>
+
+      <div class="stagetools">
+        <div class="seg">
+          <button class="on">FIT</button>
+          <button>FILL</button>
+        </div>
+        <div class="iconbtn" title="Keyboard shortcuts">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+            <path d="M5.8 5.9a2.3 2.3 0 1 1 3.2 2.1c-.6.3-1 .9-1 1.6v.3"/>
+            <circle cx="8" cy="12.5" r=".85" fill="currentColor" stroke="none"/>
+          </svg>
+        </div>
+        <div class="iconbtn" title="Pop out">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9.4 2.6H13.4V6.6"/><path d="M13.4 2.6 7.6 8.4"/>
+            <path d="M12.2 9.9v2.9a1.3 1.3 0 0 1-1.3 1.3H3.5a1.3 1.3 0 0 1-1.3-1.3V5.4a1.3 1.3 0 0 1 1.3-1.3h2.9"/>
+          </svg>
+        </div>
+        <div class="iconbtn danger" title="Close">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+            <path d="M4.2 4.2 11.8 11.8M11.8 4.2 4.2 11.8"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <div class="media-area">
+      <button class="nav prev" aria-label="Previous post">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4 7 12l8 8"/></svg>
+      </button>
+
+      <figure class="frame">
+        <img src="photo-portrait.svg" alt="">
+        <span class="ratio">2 : 3</span>
+        <span class="dwell"></span>
+      </figure>
+
+      <button class="nav next" aria-label="Next post">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4l8 8-8 8"/></svg>
+      </button>
+    </div>
+
+    <div class="filmstrip">
+      <div class="tile done"><img src="photo-landscape.svg" style="filter:hue-rotate(-40deg) saturate(.8)"><span class="num">11</span></div>
+      <div class="tile done"><img src="photo-portrait.svg" style="filter:hue-rotate(120deg)"><span class="num">12</span></div>
+      <div class="tile done"><img src="photo-landscape.svg" style="filter:hue-rotate(60deg)"><span class="num">13</span></div>
+
+      <div class="tile cur"><img src="photo-portrait.svg"><span class="num">14</span></div>
+
+      <div class="tile"><img src="photo-landscape.svg" style="filter:hue-rotate(180deg) saturate(.9)"><span class="num">15</span>
+        <span class="kind">
+          <svg width="9" height="9" viewBox="0 0 10 10" fill="currentColor"><path d="M2 1.2 8.6 5 2 8.8z"/></svg>
+        </span>
+      </div>
+      <div class="tile nsfw">
+        <div class="blurwrap"><img src="photo-portrait.svg" style="filter:blur(11px) brightness(.55) saturate(.5) hue-rotate(-60deg)"></div>
+        <span class="num">16</span>
+        <span class="tag"><span>NSFW</span></span>
+      </div>
+      <div class="tile"><img src="photo-landscape.svg" style="filter:hue-rotate(-110deg)"><span class="num">17</span></div>
+      <div class="tile more">
+        <div>
+          <span class="dots"><i></i><i></i><i></i></span><br>
+          loading<br>more
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ==================== RAIL ==================== -->
+  <aside class="rail">
+
+    <!-- queue -->
+    <div class="queuehead">
+      <span class="eyebrow">Queue</span>
+      <span class="pos"><b>14</b> of 62 loaded</span>
+    </div>
+    <div class="qtrack">
+      <span class="qloaded"><i></i></span>
+      <span class="qopen"></span>
+    </div>
+    <div class="qnote">
+      <span class="pulse"></span>
+      Reading r/EarthPorn · Hot — more posts load as you go
+    </div>
+
+    <div class="rule"></div>
+
+    <!-- identity -->
+    <div class="who">
+      <div class="av">E</div>
+      <div class="whotxt">
+        <div class="subline">
+          <span class="subname">r/EarthPorn</span>
+          <span class="dot"></span>
+          <span class="age">7h</span>
+        </div>
+        <div class="byline">posted by <b>u/example_user</b></div>
+      </div>
+    </div>
+
+    <h1 class="title">Last light on the granite spires — a two-hour hike that turned into a nine-hour wait for this exact minute</h1>
+
+    <div class="chips">
+      <span class="chip">Landscape</span>
+      <span class="chip oc">OC</span>
+    </div>
+
+    <!-- actions -->
+    <div class="actions">
+      <div class="votepill">
+        <button class="vbtn on" aria-label="Upvote">
+          <svg width="17" height="17" viewBox="0 0 16 16" fill="currentColor"><path d="M8 2.1 14.3 9.2h-3.4v4.5H5.1V9.2H1.7z"/></svg>
+        </button>
+        <span class="score">12.4k</span>
+        <button class="vbtn" aria-label="Downvote">
+          <svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M8 13.9 1.7 6.8h3.4V2.3h5.8v4.5h3.4z"/></svg>
+        </button>
+      </div>
+
+      <button class="abtn focusring">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
+          <path d="M14.3 9.3a1.7 1.7 0 0 1-1.7 1.7H5.9L3 13.6V11h-.6a1.7 1.7 0 0 1-1.7-1.7v-5A1.7 1.7 0 0 1 2.4 2.6h10.2a1.7 1.7 0 0 1 1.7 1.7z"/>
+        </svg>
+        1.2k
+      </button>
+
+      <button class="abtn saved">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.7l1.9 3.9 4.3.6-3.1 3 .7 4.3L8 11.5l-3.8 2 .7-4.3-3.1-3 4.3-.6z"/></svg>
+        Saved
+      </button>
+    </div>
+    <div class="focusnote">↑ keyboard focus ring (:focus-visible)</div>
+
+    <div class="permalink">
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#7f9098" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9.4 2.6H13.4V6.6"/><path d="M13.4 2.6 7.6 8.4"/>
+        <path d="M12.2 9.9v2.9a1.3 1.3 0 0 1-1.3 1.3H3.5a1.3 1.3 0 0 1-1.3-1.3V5.4a1.3 1.3 0 0 1 1.3-1.3h2.9"/>
+      </svg>
+      <span><u>reddit.com/r/EarthPorn/comments/1f2k9x/</u></span>
+    </div>
+
+    <!-- top comment -->
+    <div class="cbox">
+      <div class="chead">
+        <span class="eyebrow">Top comment</span>
+      </div>
+      <div class="cwho">
+        <b>u/another_user</b><span class="dot"></span><span class="up">842</span><span class="dot"></span><span>4h</span>
+      </div>
+      <p class="ctext">Nine hours is the answer nobody wants to hear. I drove out to this same ridge twice last autumn and got flat grey both times — the light only does this when the valley cloud burns off late.</p>
+      <span class="cmore">
+        Read all 1,243 comments
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5.6 3.2 10.4 8l-4.8 4.8"/></svg>
+      </span>
+    </div>
+
+    <div class="spacer"></div>
+
+    <!-- auto-advance -->
+    <div class="dock">
+      <div class="autohead">
+        <div class="autoleft">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#ff7043" stroke-width="1.6" stroke-linecap="round">
+            <circle cx="8" cy="8.7" r="5.6"/><path d="M8 5.6v3.2l2 1.2"/><path d="M6.2 1.6h3.6"/>
+          </svg>
+          <span class="lbl">Auto-advance</span>
+        </div>
+        <div class="switch"><i></i></div>
+      </div>
+
+      <div class="countrow">
+        <span class="ctrack"><i></i></span>
+        <span class="csecs">3.5<span>/8s</span></span>
+      </div>
+
+      <div class="dwellrow">
+        <div class="stepper">
+          <button>−</button><span class="val">8s</span><button>+</button>
+        </div>
+        <span class="rule2">Videos play <b>to the end</b></span>
+      </div>
+
+      <div class="legend">
+        <span class="lg"><span class="k">←</span><span class="k">→</span> Prev / Next</span>
+        <span class="lg"><span class="k">↑</span><span class="k">↓</span> Vote</span>
+        <span class="lg"><span class="k">Space</span> Pause auto</span>
+        <span class="lg"><span class="k">S</span> Save</span>
+        <span class="lg"><span class="k">Esc</span> Close</span>
+        <span class="lg"><span class="k">?</span> All shortcuts</span>
+      </div>
+    </div>
+
+  </aside>
+</div>
+</body>
+</html>

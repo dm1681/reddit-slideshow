@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Ambient — slideshow</title>
+<style>
+  html, body { margin:0; padding:0; overflow:hidden; }
+  *, *::before, *::after { box-sizing: border-box; }
+
+  :root{
+    --ink:      #070A0B;
+    --ink-2:    #0C1113;
+    --mint:     #74E3BE;
+    --mint-dim: #1B3B34;
+    --paper:    #F6F8F6;
+    --dim:      #AEBCB7;
+    --dim-2:    #7E8D88;
+    --gold:     #FFC94D;
+    --up:       #FF7B4F;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+
+  body{
+    width:1440px; height:900px; position:relative;
+    background:
+      radial-gradient(120% 90% at 50% 8%,  rgba(116,227,190,.05) 0%, rgba(0,0,0,0) 55%),
+      linear-gradient(180deg, #0B1012 0%, var(--ink) 60%, #05080A 100%);
+    color:var(--paper);
+    font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .caps{
+    font-size:11px; font-weight:700; letter-spacing:.20em;
+    text-transform:uppercase; color:var(--dim-2);
+  }
+
+  /* ───────── stage: media sits nearly edge to edge, chrome floats over it ───────── */
+  .stage{
+    position:absolute; left:36px; right:36px; top:36px; bottom:36px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .frame{
+    position:relative; max-width:100%; max-height:100%;
+    border-radius:5px; overflow:hidden;
+    box-shadow: 0 40px 120px rgba(0,0,0,.72), 0 0 0 1px rgba(255,255,255,.055);
+  }
+  .frame img{ display:block; max-width:1242px; max-height:828px; }
+
+  /* scrims — chrome has to survive a white r/pics frame */
+  .scrim-b{
+    position:absolute; left:0; right:0; bottom:0; height:420px; pointer-events:none;
+    background:linear-gradient(180deg, rgba(4,7,8,0) 0%, rgba(4,7,8,.42) 46%, rgba(4,7,8,.90) 100%);
+  }
+  .scrim-t{
+    position:absolute; left:0; right:0; top:0; height:190px; pointer-events:none;
+    background:linear-gradient(180deg, rgba(4,7,8,.78) 0%, rgba(4,7,8,0) 100%);
+  }
+
+  /* ───────── perimeter sweep = dwell for this post ───────── */
+  .sweep{ position:absolute; inset:0; pointer-events:none; }
+  .sweep-head{
+    position:absolute; left:877px; top:882px; width:9px; height:9px; margin:-4.5px 0 0 -4.5px;
+    border-radius:50%; background:var(--mint);
+    box-shadow:0 0 16px 4px rgba(116,227,190,.55), 0 0 40px 10px rgba(116,227,190,.20);
+  }
+
+  /* ───────── session badge, top-left ───────── */
+  .session{ position:absolute; left:52px; top:46px; display:flex; align-items:center; gap:13px; }
+  .live{
+    width:11px; height:11px; border-radius:50%; background:var(--mint); flex:none;
+    box-shadow:0 0 0 5px rgba(116,227,190,.14), 0 0 20px rgba(116,227,190,.6);
+  }
+  .session-name{ font-size:23px; font-weight:600; letter-spacing:-.008em; color:var(--paper); }
+  .session-sub{ margin-top:4px; font-size:12.5px; letter-spacing:.16em; color:#8B9994; }
+  .session-sub b{ color:var(--mint); font-weight:700; }
+
+  /* ───────── queue ladder, left rail ───────── */
+  .queue{ position:absolute; left:52px; top:206px; width:120px; }
+  .queue-count{ display:flex; align-items:baseline; gap:7px; margin-bottom:16px; }
+  .queue-count .n{ font-size:30px; font-weight:600; color:var(--mint); line-height:1; letter-spacing:-.02em; }
+  .queue-count .of{ font-size:17px; color:var(--dim-2); line-height:1; }
+  .ladder{ position:relative; width:14px; height:431px; }
+  .ladder-track{
+    position:absolute; left:0; top:0; width:14px; height:431px;
+    background:repeating-linear-gradient(to bottom,
+      rgba(255,255,255,.24) 0 2px, rgba(0,0,0,0) 2px 11px);
+  }
+  .ladder-done{
+    position:absolute; left:0; top:0; width:14px; height:121px;
+    background:repeating-linear-gradient(to bottom,
+      rgba(116,227,190,.42) 0 2px, rgba(0,0,0,0) 2px 11px);
+  }
+  .ladder-now{
+    position:absolute; left:0; top:121px; width:32px; height:3px; border-radius:2px;
+    background:var(--mint); box-shadow:0 0 14px rgba(116,227,190,.7);
+  }
+  .ladder-more{
+    position:absolute; left:0; top:444px; width:14px; height:24px;
+    background:repeating-linear-gradient(to bottom,
+      rgba(255,255,255,.10) 0 2px, rgba(0,0,0,0) 2px 11px);
+  }
+  .queue-note{ margin-top:38px; line-height:1.5; }
+
+  /* ───────── next peek, top-right (NSFW is held, not painted) ───────── */
+  .next{ position:absolute; right:52px; top:44px; width:196px; text-align:right; }
+  .next .caps{ display:block; margin-bottom:9px; }
+  .next-thumb{
+    position:relative; width:196px; height:112px; border-radius:4px; overflow:hidden;
+    border:1px solid rgba(255,255,255,.13); background:#101617;
+  }
+  .next-thumb img{
+    position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
+    filter:blur(17px) saturate(.55) brightness(.52); transform:scale(1.25);
+  }
+  .next-lock{
+    position:absolute; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:6px;
+  }
+  .next-lock svg{ display:block; }
+  .next-lock span{
+    font-size:10px; font-weight:700; letter-spacing:.18em; color:#E7D2C6;
+  }
+  .next-cap{ margin-top:9px; font-size:13px; color:var(--dim-2); line-height:1.45; }
+  .next-cap b{ color:var(--dim); font-weight:600; }
+
+  /* ───────── title block, bottom-left ───────── */
+  .info{ position:absolute; left:200px; bottom:86px; width:830px; }
+  .info-title{
+    font-size:53px; line-height:1.09; font-weight:600; letter-spacing:-.019em;
+    color:#FFFFFF; text-shadow:0 2px 26px rgba(0,0,0,.75);
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+  }
+  .info-meta{
+    margin-top:20px; display:flex; align-items:center; gap:14px;
+    font-size:21px; color:var(--dim); text-shadow:0 1px 14px rgba(0,0,0,.8);
+  }
+  .info-meta .sub{ color:var(--paper); font-weight:600; }
+  .info-meta .sep{ color:#5C6A66; }
+  .info-meta .score{ display:inline-flex; align-items:center; gap:7px; color:var(--up); font-weight:600; }
+  .chip-saved{
+    display:inline-flex; align-items:center; gap:7px;
+    padding:5px 12px 6px; border-radius:999px;
+    background:rgba(255,201,77,.13); border:1px solid rgba(255,201,77,.42);
+    color:var(--gold); font-size:15px; font-weight:600; letter-spacing:.01em;
+  }
+
+  /* ───────── dwell, bottom-right ───────── */
+  .dwell{ position:absolute; right:52px; bottom:80px; text-align:right; }
+  .dwell-num{
+    display:flex; align-items:baseline; justify-content:flex-end; gap:6px;
+    color:var(--paper); text-shadow:0 2px 20px rgba(0,0,0,.8);
+  }
+  .dwell-num .n{ font-size:70px; font-weight:300; line-height:.86; letter-spacing:-.045em; }
+  .dwell-num .u{ font-size:25px; font-weight:400; color:var(--dim); }
+  .dwell-of{ margin-top:11px; font-size:14px; color:var(--dim-2); letter-spacing:.02em; }
+  .dwell-hold{
+    margin-top:15px; display:inline-flex; align-items:center; gap:9px;
+    font-size:15px; color:var(--dim);
+  }
+  .key{
+    display:inline-flex; align-items:center; justify-content:center;
+    min-width:30px; height:26px; padding:0 8px;
+    border:1px solid rgba(255,255,255,.26); border-radius:5px;
+    background:rgba(255,255,255,.055);
+    font-size:13px; font-weight:600; color:var(--paper);
+  }
+</style>
+</head>
+<body>
+
+  <!-- media -->
+  <div class="stage">
+    <div class="frame">
+      <img src="photo-landscape.svg" width="1242" height="828" alt="">
+      <div class="scrim-t"></div>
+      <div class="scrim-b"></div>
+    </div>
+  </div>
+
+  <!-- perimeter sweep: 62% of this post's dwell has elapsed -->
+  <svg class="sweep" width="1440" height="900" viewBox="0 0 1440 900" aria-hidden="true">
+    <rect x="18" y="18" width="1404" height="864" rx="2"
+          fill="none" stroke="rgba(255,255,255,.085)" stroke-width="3"/>
+    <rect x="18" y="18" width="1404" height="864" rx="2"
+          fill="none" stroke="#74E3BE" stroke-width="3" stroke-linecap="butt"
+          pathLength="1000" stroke-dasharray="620 380"/>
+  </svg>
+  <div class="sweep-head"></div>
+
+  <!-- session -->
+  <div class="session">
+    <div class="live"></div>
+    <div>
+      <div class="session-name">r/EarthPorn</div>
+      <div class="session-sub caps"><b>Ambient</b> &nbsp;·&nbsp; 10s each &nbsp;·&nbsp; sound on</div>
+    </div>
+  </div>
+
+  <!-- queue position -->
+  <div class="queue">
+    <div class="queue-count"><span class="n">12</span><span class="of">/ 40</span></div>
+    <div class="ladder">
+      <div class="ladder-track"></div>
+      <div class="ladder-done"></div>
+      <div class="ladder-now"></div>
+      <div class="ladder-more"></div>
+    </div>
+    <div class="queue-note caps">40 loaded<br>more on the way</div>
+  </div>
+
+  <!-- what's next — an adult post is held, never painted -->
+  <div class="next">
+    <span class="caps">Next up</span>
+    <div class="next-thumb">
+      <img src="photo-portrait.svg" alt="">
+      <div class="next-lock">
+        <svg width="22" height="24" viewBox="0 0 22 24" fill="none">
+          <rect x="2" y="10" width="18" height="12" rx="2.5" stroke="#E7D2C6" stroke-width="1.8"/>
+          <path d="M6 10V7a5 5 0 0 1 10 0v3" stroke="#E7D2C6" stroke-width="1.8"/>
+        </svg>
+        <span>NSFW</span>
+      </div>
+    </div>
+    <div class="next-cap"><b>Held.</b> Press <span style="color:#F6F8F6">R</span> to reveal,<br>or it is skipped in 10s.</div>
+  </div>
+
+  <!-- post -->
+  <div class="info">
+    <div class="info-title">First light on the Torngat ridgeline after four days of rain</div>
+    <div class="info-meta">
+      <span class="sub">r/EarthPorn</span>
+      <span class="sep">·</span>
+      <span class="score">
+        <svg width="15" height="14" viewBox="0 0 15 14" fill="none" aria-hidden="true">
+          <path d="M7.5 1.5 14 9H9.8v3.5H5.2V9H1L7.5 1.5Z" fill="#FF7B4F"/>
+        </svg>12.4k</span>
+      <span class="sep">·</span>
+      <span>u/example_user</span>
+      <span class="sep">·</span>
+      <span class="chip-saved">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="#FFC94D" aria-hidden="true">
+          <path d="M7 .8 8.9 4.7l4.3.6-3.1 3 .7 4.3L7 10.6 3.2 12.6l.7-4.3L.8 5.3l4.3-.6L7 .8Z"/>
+        </svg>Saved</span>
+    </div>
+  </div>
+
+  <!-- dwell -->
+  <div class="dwell">
+    <div class="dwell-num"><span class="n">4</span><span class="u">s</span></div>
+    <div class="dwell-of">of 10s</div>
+    <div class="dwell-hold"><span class="key">space</span> hold</div>
+  </div>
+
+</body>
+</html>

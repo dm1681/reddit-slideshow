@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Deck — popup</title>
+<style>
+  html, body { margin:0; padding:0; overflow:hidden; }
+  *, *::before, *::after { box-sizing: border-box; }
+
+  :root{
+    --bg:      #0C1014;
+    --panel:   #12171C;
+    --panel2:  #171E24;
+    --panel3:  #1E262E;
+    --line:    #222B33;
+    --line2:   #2F3A44;
+    --text:    #E7EEF4;
+    --dim:     #94A3B0;
+    --dim2:    #6C7A87;
+    --accent:  #35D3C1;
+    --accentD: #12A697;
+    --img:     #35D3C1;
+    --vid:     #6E8CFF;
+    --txt:     #F2B33D;
+    --lnk:     #9B8CFF;
+    --nsfw:    #E0567A;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  body{
+    width:360px; height:520px;
+    background:var(--bg); color:var(--text);
+    font-family:var(--sans); font-size:13px;
+    -webkit-font-smoothing:antialiased;
+    font-variant-numeric:tabular-nums;
+    display:flex; flex-direction:column;
+  }
+
+  .lbl{
+    font-size:9px; font-weight:700; letter-spacing:.15em; text-transform:uppercase;
+    color:var(--dim2);
+  }
+
+  /* ---------- header 52 ---------- */
+  .head{
+    flex:0 0 52px; height:52px; display:flex; align-items:center; gap:10px;
+    padding:0 14px; background:var(--panel); border-bottom:1px solid var(--line);
+  }
+  .mark{
+    width:24px; height:24px; border-radius:6px; flex:none;
+    background:linear-gradient(150deg, var(--accent), var(--accentD));
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 0 0 1px rgba(53,211,193,.26);
+  }
+  .head .nm{ font-size:13px; font-weight:650; letter-spacing:-.1px; }
+  .head .sub{ font-size:9.5px; color:var(--dim2); margin-top:1px; letter-spacing:.04em; }
+  .gear{
+    margin-left:auto; width:28px; height:28px; border-radius:7px; flex:none;
+    background:var(--panel2); border:1px solid var(--line2); color:var(--dim);
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+  }
+
+  /* ---------- body ---------- */
+  .body{ flex:1; min-height:0; padding:13px 14px; display:flex; flex-direction:column; gap:11px; }
+
+  .card{ background:var(--panel); border:1px solid var(--line); border-radius:9px; }
+
+  /* source */
+  .src{ padding:10px 12px 11px; }
+  .srctop{ display:flex; align-items:center; gap:8px; margin-bottom:9px; }
+  .srctop .name{ font-size:15px; font-weight:650; letter-spacing:-.2px; }
+  .livedot{ width:6px; height:6px; border-radius:50%; background:var(--accent); box-shadow:0 0 0 3px rgba(53,211,193,.15); flex:none; }
+  .srctop .live{ font-size:9px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--accentD); }
+  .seg{ display:flex; background:var(--panel3); border:1px solid var(--line2); border-radius:7px; padding:2px; gap:2px; }
+  .seg button{
+    flex:1; height:24px; border:0; border-radius:5px; background:transparent; cursor:pointer;
+    font-family:var(--sans); font-size:11px; font-weight:600; color:var(--dim);
+  }
+  .seg button.on{ background:var(--accent); color:#04211E; }
+  .seg .k{ font-family:var(--mono); font-size:8.5px; opacity:.62; margin-left:3px; }
+
+  /* composition */
+  .comp{ padding:10px 12px 11px; }
+  .comprow{ display:flex; align-items:baseline; justify-content:space-between; margin-bottom:9px; }
+  .comprow .big{ font-family:var(--mono); font-size:17px; font-weight:600; letter-spacing:-.4px; }
+  .comprow .big em{ font-style:normal; font-size:11px; font-weight:500; color:var(--dim); margin-left:5px; font-family:var(--sans); }
+  .rescan{
+    display:inline-flex; align-items:center; gap:5px; height:21px; padding:0 8px; border-radius:5px;
+    background:var(--panel2); border:1px solid var(--line2); color:var(--dim);
+    font-size:10px; font-weight:600; cursor:pointer;
+  }
+  .stack{ display:flex; height:7px; gap:2px; margin-bottom:11px; }
+  .stack i{ display:block; height:7px; border-radius:2px; }
+
+  .legend{ display:grid; grid-template-columns:1fr 1fr; gap:7px 12px; }
+  .leg{ display:flex; align-items:center; gap:7px; }
+  .swatch{ width:8px; height:8px; border-radius:2px; flex:none; }
+  .leg .nm{ font-size:11px; color:var(--dim); flex:1; }
+  .leg .ct{ font-family:var(--mono); font-size:11px; color:var(--text); font-weight:600; }
+  .leg.off .nm, .leg.off .ct{ color:var(--dim2); text-decoration:line-through; text-decoration-color:var(--line2); }
+  .leg.off .swatch{ opacity:.3; }
+  .chkbx{
+    width:13px; height:13px; border-radius:3.5px; flex:none;
+    border:1px solid var(--line2); background:var(--panel3);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .chkbx.on{ background:var(--accent); border-color:var(--accent); }
+  .leg.gate .ct{ color:var(--nsfw); }
+  .gatechip{
+    font-family:var(--mono); font-size:8.5px; font-weight:700; letter-spacing:.05em;
+    color:#F79FB3; background:rgba(224,86,122,.16); border:1px solid rgba(224,86,122,.42);
+    border-radius:3px; padding:1px 4px;
+  }
+
+  /* playback */
+  .play{ padding:9px 12px 10px; }
+  .playtop{ display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+
+  /* account */
+  .acct{
+    display:flex; align-items:center; gap:8px; height:32px; padding:0 11px;
+    border-radius:8px; background:rgba(53,211,193,.07); border:1px solid rgba(53,211,193,.24);
+    font-size:11px; color:#A6C8C4;
+  }
+  .acct b{ color:#CFEFEA; font-weight:600; }
+  .acct .ok{ color:var(--accent); }
+
+  /* start */
+  .start{
+    height:44px; border:0; border-radius:9px; cursor:pointer; width:100%;
+    background:linear-gradient(180deg,#3EE0CD,#16B0A0); color:#03211E;
+    font-family:var(--sans); font-size:14px; font-weight:700; letter-spacing:-.1px;
+    display:flex; align-items:center; justify-content:center; gap:9px;
+    box-shadow:0 3px 14px rgba(18,166,151,.3);
+  }
+  .start .n{ font-family:var(--mono); font-weight:700; }
+  .start .arrow{ opacity:.6; }
+
+  /* footer 40 */
+  .foot{
+    flex:0 0 40px; height:40px; display:flex; align-items:center; gap:9px;
+    padding:0 14px; background:var(--panel); border-top:1px solid var(--line);
+  }
+  kbd{
+    font-family:var(--mono); font-size:9px; line-height:1; color:#B9C5CE;
+    background:var(--panel3); border:1px solid var(--line2); border-bottom-width:2px;
+    border-radius:3.5px; padding:3px 4px; min-width:16px; text-align:center; display:inline-block;
+  }
+  .foot em{ font-style:normal; font-size:10px; color:var(--dim2); }
+  .foot .right{ margin-left:auto; font-size:10px; color:var(--dim2); }
+</style>
+</head>
+<body>
+
+  <!-- ---------- HEADER ---------- -->
+  <div class="head">
+    <div class="mark">
+      <svg width="13" height="13" viewBox="0 0 14 14">
+        <rect x="1" y="1.5" width="12" height="3" rx="1" fill="#04211E"/>
+        <rect x="1" y="5.8" width="12" height="3" rx="1" fill="#04211E" opacity=".6"/>
+        <rect x="1" y="10.1" width="12" height="3" rx="1" fill="#04211E" opacity=".3"/>
+      </svg>
+    </div>
+    <div>
+      <div class="nm">Reddit Slideshow</div>
+      <div class="sub">Deck &middot; no session running</div>
+    </div>
+    <div class="gear">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3">
+        <circle cx="7" cy="7" r="2.3"/>
+        <path d="M7 .9v1.6M7 11.5v1.6M1.4 7h1.6M11 7h1.6M3.1 3.1l1.1 1.1M9.8 9.8l1.1 1.1M10.9 3.1L9.8 4.2M4.2 9.8l-1.1 1.1" stroke-linecap="round"/>
+      </svg>
+    </div>
+  </div>
+
+  <!-- ---------- BODY ---------- -->
+  <div class="body">
+
+    <!-- SOURCE -->
+    <div class="card src">
+      <div class="srctop">
+        <span class="livedot"></span>
+        <span class="name">r/EarthPorn</span>
+        <span class="live">this tab</span>
+      </div>
+      <div class="seg">
+        <button class="on">Hot</button>
+        <button>New</button>
+        <button>Top</button>
+        <button>Rising</button>
+      </div>
+    </div>
+
+    <!-- COMPOSITION -->
+    <div class="card comp">
+      <div class="comprow">
+        <div class="big">46<em>posts on this page</em></div>
+        <div class="rescan">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round">
+            <path d="M8.7 4.2A3.8 3.8 0 101.6 6M8.7 1.4v2.8H5.9"/>
+          </svg>
+          Rescan
+        </div>
+      </div>
+
+      <div class="stack">
+        <i style="flex:28; background:var(--img)"></i>
+        <i style="flex:9;  background:var(--vid)"></i>
+        <i style="flex:4;  background:var(--txt)"></i>
+        <i style="flex:2;  background:var(--lnk); opacity:.35"></i>
+        <i style="flex:3;  background:var(--nsfw)"></i>
+      </div>
+
+      <div class="legend">
+        <div class="leg">
+          <span class="chkbx on"><svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="#04211E" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M1.4 4.2l1.8 1.8L6.7 2.3"/></svg></span>
+          <span class="swatch" style="background:var(--img)"></span>
+          <span class="nm">Images</span><span class="ct">28</span>
+        </div>
+        <div class="leg">
+          <span class="chkbx on"><svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="#04211E" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M1.4 4.2l1.8 1.8L6.7 2.3"/></svg></span>
+          <span class="swatch" style="background:var(--vid)"></span>
+          <span class="nm">Video</span><span class="ct">9</span>
+        </div>
+        <div class="leg">
+          <span class="chkbx on"><svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="#04211E" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M1.4 4.2l1.8 1.8L6.7 2.3"/></svg></span>
+          <span class="swatch" style="background:var(--txt)"></span>
+          <span class="nm">Text posts</span><span class="ct">4</span>
+        </div>
+        <div class="leg off">
+          <span class="chkbx"></span>
+          <span class="swatch" style="background:var(--lnk)"></span>
+          <span class="nm">Links</span><span class="ct">2</span>
+        </div>
+        <div class="leg gate" style="grid-column:1 / -1">
+          <span class="chkbx on"><svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="#04211E" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M1.4 4.2l1.8 1.8L6.7 2.3"/></svg></span>
+          <span class="swatch" style="background:var(--nsfw)"></span>
+          <span class="nm">NSFW &amp; spoilers</span>
+          <span class="gatechip">BLUR FIRST</span>
+          <span class="ct">3</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- PLAYBACK -->
+    <div class="card play">
+      <div class="playtop">
+        <span class="lbl">Auto-advance</span>
+        <span style="font-size:10px; color:var(--dim2)">video plays to the end</span>
+      </div>
+      <div class="seg">
+        <button>Off</button>
+        <button>3s</button>
+        <button class="on">5s</button>
+        <button>8s</button>
+        <button>15s</button>
+      </div>
+    </div>
+
+    <!-- ACCOUNT -->
+    <div class="acct">
+      <span class="ok">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6.3l2.6 2.6L10 3.3"/></svg>
+      </span>
+      Signed in as <b>u/example_user</b> &mdash; vote &amp; save on
+    </div>
+
+    <!-- START -->
+    <button class="start">
+      <svg width="13" height="13" viewBox="0 0 13 13" fill="#03211E"><path d="M3 1.6l8 4.9-8 4.9z"/></svg>
+      Start deck &middot; <span class="n">41</span> posts
+      <span class="arrow">&#8594;</span>
+    </button>
+
+  </div>
+
+  <!-- ---------- FOOTER ---------- -->
+  <div class="foot">
+    <kbd>&#8592;</kbd><kbd>&#8594;</kbd><em>step</em>
+    <kbd>Space</kbd><em>auto</em>
+    <kbd>F</kbd><em>filters</em>
+    <span class="right"><kbd>?</kbd> all keys</span>
+  </div>
+
+</body>
+</html>

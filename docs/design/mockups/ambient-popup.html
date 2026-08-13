@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Ambient — popup</title>
+<style>
+  html, body { margin:0; padding:0; overflow:hidden; }
+  *, *::before, *::after { box-sizing: border-box; }
+
+  :root{
+    --ink:      #090D0E;
+    --card:     #121819;
+    --card-2:   #1A2325;
+    --line:     #222D2E;
+    --mint:     #74E3BE;
+    --paper:    #F2F6F4;
+    --dim:      #A6B4B0;
+    --dim-2:    #7A8884;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+
+  body{
+    width:360px; height:520px;
+    background:
+      radial-gradient(130% 55% at 50% 0%, rgba(116,227,190,.08) 0%, rgba(0,0,0,0) 60%),
+      var(--ink);
+    color:var(--paper);
+    font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;
+    font-variant-numeric:tabular-nums;
+  }
+
+  .wrap{
+    width:360px; height:520px; padding:18px 20px 14px;
+    display:flex; flex-direction:column;
+  }
+
+  .caps{
+    font-size:10px; font-weight:700; letter-spacing:.18em;
+    text-transform:uppercase; color:var(--dim-2);
+  }
+
+  /* header */
+  .head{ display:flex; align-items:center; gap:9px; margin-bottom:13px; }
+  .dot{
+    width:9px; height:9px; border-radius:50%; background:var(--mint); flex:none;
+    box-shadow:0 0 0 4px rgba(116,227,190,.13);
+  }
+  .head .name{ font-size:12px; font-weight:700; letter-spacing:.20em; text-transform:uppercase; }
+  .head .right{ margin-left:auto; font-size:10.5px; color:#5F6C69; letter-spacing:.05em; }
+
+  /* source */
+  .source{
+    position:relative; background:var(--card); border:1px solid var(--line);
+    border-radius:9px; padding:12px 14px 13px 17px; overflow:hidden;
+  }
+  .source::before{ content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--mint); }
+  .source .sname{ font-size:21px; font-weight:600; letter-spacing:-.015em; line-height:1.1; }
+  .source .sdesc{ margin-top:6px; font-size:11.5px; color:var(--dim); line-height:1.4; }
+  .source .sdesc b{ color:var(--paper); font-weight:700; }
+
+  /* sections */
+  .sec{ margin-top:15px; }
+  .sec-head{ display:flex; align-items:baseline; margin-bottom:8px; }
+  .sec-head .hint{ margin-left:auto; font-size:10.5px; color:#5F6C69; }
+
+  .row{ display:flex; gap:6px; }
+  .chip{
+    flex:1; height:34px; border-radius:7px;
+    border:1px solid var(--line); background:var(--card);
+    color:var(--dim); font-size:13px; font-weight:600;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .chip.on{
+    background:rgba(116,227,190,.15); border-color:rgba(116,227,190,.60); color:var(--mint);
+  }
+  .note{ margin-top:7px; font-size:11px; color:#6C7A76; line-height:1.4; }
+
+  .seg{ display:flex; background:var(--card); border:1px solid var(--line); border-radius:7px; padding:3px; }
+  .seg > div{
+    flex:1; height:28px; border-radius:5px; font-size:12.5px; font-weight:600; color:var(--dim);
+    display:flex; align-items:center; justify-content:center; gap:6px;
+  }
+  .seg > div.on{ background:var(--card-2); color:var(--paper); box-shadow:0 1px 3px rgba(0,0,0,.5); }
+  .seg .swatch{ width:7px; height:7px; border-radius:2px; background:var(--mint); flex:none; }
+
+  /* start */
+  .start{
+    margin-top:16px; width:100%; height:48px; border:none; border-radius:9px;
+    background:linear-gradient(180deg,#8FF0CE 0%, #5CD2AA 100%);
+    color:#06201A; font-family:var(--sans);
+    display:flex; align-items:center; padding:0 18px;
+    box-shadow:0 6px 22px rgba(116,227,190,.20);
+  }
+  .start .lbl{ font-size:16px; font-weight:700; letter-spacing:-.012em; }
+  .start .val{ margin-left:auto; display:flex; align-items:center; gap:8px; font-size:13px; font-weight:700; opacity:.70; }
+  .start .val svg{ display:block; }
+
+  /* keys */
+  .keys{ margin-top:14px; display:grid; grid-template-columns:1fr 1fr; gap:7px 10px; }
+  .keys div{ display:flex; align-items:center; gap:7px; font-size:11px; color:#6C7A76; }
+  .k{
+    display:inline-flex; align-items:center; justify-content:center;
+    min-width:23px; height:19px; padding:0 5px; flex:none;
+    border:1px solid #2A3436; border-radius:4px; background:#141B1C;
+    font-size:10px; font-weight:700; color:var(--dim);
+  }
+
+  .foot{
+    margin-top:auto; padding-top:12px;
+    font-size:10.5px; color:#59645F; line-height:1.45; text-align:center;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="head">
+    <span class="dot"></span>
+    <span class="name">Ambient</span>
+    <span class="right">reddit slideshow</span>
+  </div>
+
+  <div class="source">
+    <div class="sname">r/EarthPorn</div>
+    <div class="sdesc"><b>43 posts</b> ready &middot; keeps reading as the feed loads</div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-head">
+      <span class="caps">Hold each post for</span>
+      <span class="hint">video always finishes</span>
+    </div>
+    <div class="row">
+      <div class="chip">6s</div>
+      <div class="chip on">10s</div>
+      <div class="chip">20s</div>
+      <div class="chip">45s</div>
+      <div class="chip">Auto</div>
+    </div>
+    <div class="note">Auto fits the hold to each post.</div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-head">
+      <span class="caps">Adult &amp; spoiler</span>
+    </div>
+    <div class="seg">
+      <div>Skip</div>
+      <div class="on"><span class="swatch"></span>Blur</div>
+      <div>Show</div>
+    </div>
+    <div class="note">Locked behind a blur until you press R.</div>
+  </div>
+
+  <button class="start">
+    <span class="lbl">Start ambient</span>
+    <span class="val">
+      10s
+      <svg width="13" height="12" viewBox="0 0 13 12" fill="none" aria-hidden="true">
+        <path d="M1 6h10M7 2l4 4-4 4" stroke="#06201A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </span>
+  </button>
+
+  <div class="keys">
+    <div><span class="k">space</span> hold</div>
+    <div><span class="k">&larr;</span><span class="k">&rarr;</span> step</div>
+    <div><span class="k">S</span> save</div>
+    <div><span class="k">esc</span> exit</div>
+  </div>
+
+  <div class="foot">Opens fullscreen. Move the mouse to wake controls.</div>
+
+</div>
+</body>
+</html>
