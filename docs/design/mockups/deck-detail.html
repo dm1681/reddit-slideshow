@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Deck — settings drawer</title>
+<style>
+  html, body { margin:0; padding:0; overflow:hidden; }
+  *, *::before, *::after { box-sizing: border-box; }
+
+  :root{
+    --bg:      #090B0E;
+    --stage:   #0C0F13;
+    --panel:   #12161B;
+    --panel2:  #171D23;
+    --panel3:  #1E262E;
+    --line:    #232C35;
+    --line2:   #2F3A45;
+    --text:    #E7EEF4;
+    --dim:     #94A3B0;
+    --dim2:    #6C7A87;
+    --accent:  #35D3C1;
+    --accentD: #12A697;
+    --up:      #FF5A1F;
+    --vid:     #6E8CFF;
+    --txt:     #F2B33D;
+    --lnk:     #9B8CFF;
+    --nsfw:    #E0567A;
+    --danger:  #FF6B6B;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  body{
+    width:1440px; height:900px; position:relative;
+    background:var(--bg); color:var(--text);
+    font-family:var(--sans); -webkit-font-smoothing:antialiased;
+    font-variant-numeric:tabular-nums;
+  }
+
+  /* ================= BACKDROP: the deck, dimmed ================= */
+  .app{ position:absolute; inset:0; display:flex; flex-direction:column; }
+
+  .toprail{
+    flex:0 0 52px; display:flex; align-items:center; padding:0 16px 0 14px;
+    background:var(--panel); border-bottom:1px solid var(--line);
+  }
+  .mark{
+    width:26px; height:26px; border-radius:6px; flex:none;
+    background:linear-gradient(150deg, var(--accent), var(--accentD));
+    display:flex; align-items:center; justify-content:center;
+  }
+  .vsep{ width:1px; height:24px; background:var(--line2); margin:0 14px; flex:none; }
+  .source{ display:flex; align-items:center; gap:9px; }
+  .source .sr{ font-size:14px; font-weight:650; }
+  .pill{
+    display:inline-flex; align-items:center; gap:5px; height:20px; padding:0 8px;
+    border-radius:5px; background:var(--panel3); border:1px solid var(--line2);
+    font-size:10px; font-weight:700; letter-spacing:.09em; text-transform:uppercase; color:var(--dim);
+  }
+  .livedot{ width:6px; height:6px; border-radius:50%; background:var(--accent); }
+  .qnum{ display:flex; align-items:baseline; gap:5px; }
+  .qnum b{ font-family:var(--mono); font-size:21px; font-weight:600; }
+  .qnum span{ font-size:11.5px; color:var(--dim); }
+
+  .stagewrap{
+    flex:1 1 auto; min-height:0; position:relative;
+    background:radial-gradient(120% 90% at 50% 0%, #10151A 0%, var(--stage) 62%), var(--stage);
+    border-bottom:1px solid var(--line); overflow:hidden;
+  }
+  .grid{
+    position:absolute; inset:0; opacity:.55;
+    background-image:
+      linear-gradient(to right, rgba(255,255,255,.022) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255,255,255,.022) 1px, transparent 1px);
+    background-size:48px 48px;
+  }
+  .stage{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding:26px 90px; }
+  .stage img{
+    display:block; width:867px; height:578px;
+    border:1px solid rgba(255,255,255,.09); box-shadow:0 22px 64px rgba(0,0,0,.6);
+  }
+
+  .meta{
+    flex:0 0 66px; display:flex; align-items:center; gap:14px;
+    padding:0 16px; background:var(--panel); border-bottom:1px solid var(--line);
+  }
+  .typebadge{
+    flex:none; width:44px; height:44px; border-radius:8px;
+    background:var(--panel3); border:1px solid var(--line2);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+  }
+  .typebadge .t{ font-family:var(--mono); font-size:8px; color:var(--dim2); }
+  .mtitle{ font-size:15px; font-weight:620; color:#F2F7FA; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:5px; }
+  .mrow{ display:flex; align-items:center; gap:9px; font-size:11.5px; color:var(--dim); }
+  .mrow .dot{ width:3px; height:3px; border-radius:50%; background:var(--line2); }
+  .mrow .sc{ font-family:var(--mono); color:var(--up); font-weight:600; }
+
+  .strip{
+    flex:0 0 116px; position:relative; background:var(--panel2);
+    border-bottom:1px solid var(--line); padding:9px 0 0 16px; overflow:hidden;
+  }
+  .rowtiles{ display:flex; gap:10px; align-items:flex-start; }
+  .tile{ width:126px; flex:none; }
+  .thumb{
+    position:relative; width:126px; height:74px; border-radius:5px; overflow:hidden;
+    background-color:#0E1216; background-position:center; background-size:cover; background-repeat:no-repeat;
+    border:1px solid var(--line);
+  }
+  .tile.cur .thumb{ border:2px solid var(--accent); box-shadow:0 0 0 3px rgba(53,211,193,.2); }
+  .tile.seen .thumb{ opacity:.5; }
+  .tile.dropped .thumb{ opacity:.22; border-style:dashed; }
+  .tile.dropped .tcap{ color:#57636D; text-decoration:line-through; text-decoration-color:#3A464F; }
+  .tcap{ display:flex; align-items:center; gap:6px; margin-top:7px; font-size:10px; color:var(--dim); white-space:nowrap; overflow:hidden; }
+  .tcap b{ font-family:var(--mono); font-weight:600; color:var(--dim2); flex:none; }
+  .tcap span{ overflow:hidden; text-overflow:ellipsis; }
+  .tflag{
+    position:absolute; left:5px; top:5px; height:15px; padding:0 5px; border-radius:3px;
+    background:rgba(6,9,12,.84); border:1px solid rgba(255,255,255,.14);
+    font-family:var(--mono); font-size:8.5px; color:#CBD6DE; display:inline-flex; align-items:center;
+  }
+  .nsfwblur{ position:absolute; inset:-14px; background-position:center; background-size:cover; filter:blur(11px) saturate(.6) brightness(.62); }
+  .nsfwtag{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; }
+  .nsfwtag i{
+    height:19px; padding:0 8px; border-radius:4px; background:rgba(224,86,122,.22);
+    border:1px solid rgba(224,86,122,.65); color:#F79FB3; font-style:normal;
+    font-family:var(--mono); font-size:9px; font-weight:700; display:inline-flex; align-items:center;
+  }
+  .texttile{ position:absolute; inset:0; padding:12px 11px 0; background:linear-gradient(160deg,#1B232B,#131A20); }
+  .texttile i{ display:block; height:4px; border-radius:2px; background:var(--line2); margin-bottom:6px; }
+  .linktile{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    background:linear-gradient(160deg,#1A2027,#12181D); font-family:var(--mono); font-size:9.5px; color:var(--dim);
+  }
+  .keyline{ flex:0 0 30px; background:var(--panel); display:flex; align-items:center; padding:0 16px; }
+  .kg{ display:inline-flex; align-items:center; gap:6px; margin-right:17px; }
+  .kg em{ font-style:normal; font-size:10.5px; color:var(--dim2); }
+  kbd{
+    font-family:var(--mono); font-size:9.5px; line-height:1; color:#B9C5CE;
+    background:var(--panel3); border:1px solid var(--line2); border-bottom-width:2px;
+    border-radius:3.5px; padding:3px 5px; min-width:18px; text-align:center; display:inline-block;
+  }
+
+  /* scrim */
+  .scrim{ position:absolute; inset:0; background:rgba(5,7,9,.66); z-index:20; }
+
+  /* failure toast — the real message, on screen, with a way out */
+  .failtoast{
+    position:absolute; left:20px; bottom:236px; z-index:25;
+    width:392px; padding:12px 14px 13px;
+    background:#161014; border:1px solid rgba(255,107,107,.42); border-left:3px solid var(--danger);
+    border-radius:9px; box-shadow:0 16px 40px rgba(0,0,0,.55);
+  }
+  .failtoast .ft1{ display:flex; align-items:center; gap:8px; font-size:12.5px; font-weight:650; color:#FFC9C9; margin-bottom:5px; }
+  .failtoast .ft2{ font-size:11.5px; color:#B9A8AC; line-height:1.5; }
+  .failtoast .ftacts{ display:flex; gap:7px; margin-top:10px; }
+  .ftbtn{
+    height:26px; padding:0 10px; border-radius:6px; cursor:pointer;
+    background:rgba(255,107,107,.13); border:1px solid rgba(255,107,107,.4); color:#FFC9C9;
+    font-family:var(--sans); font-size:11px; font-weight:600;
+  }
+  .ftbtn.ghost{ background:transparent; border-color:var(--line2); color:var(--dim); }
+
+  /* ================= DRAWER ================= */
+  .drawer{
+    position:absolute; right:0; top:0; bottom:0; width:640px; z-index:40;
+    background:var(--panel); border-left:1px solid var(--line2);
+    box-shadow:-30px 0 70px rgba(0,0,0,.55);
+    display:flex; flex-direction:column;
+  }
+
+  .dhead{
+    flex:0 0 64px; display:flex; align-items:center; gap:12px;
+    padding:0 22px; border-bottom:1px solid var(--line); background:var(--panel2);
+  }
+  .dhead h1{ margin:0; font-size:15.5px; font-weight:650; letter-spacing:-.15px; }
+  .dhead .hs{ font-size:10.5px; color:var(--dim2); margin-top:2px; }
+  .dhead .esc{ margin-left:auto; display:flex; align-items:center; gap:8px; font-size:10.5px; color:var(--dim2); }
+
+  .dbody{ flex:1; min-height:0; overflow:hidden; padding:20px 22px 0; }
+
+  .sect{ margin-bottom:20px; }
+  .sect > h2{
+    margin:0 0 10px; font-size:9.5px; font-weight:700; letter-spacing:.15em;
+    text-transform:uppercase; color:var(--dim2);
+    display:flex; align-items:center; gap:10px;
+  }
+  .sect > h2 i{ flex:1; height:1px; background:var(--line); font-style:normal; }
+  .sect > h2 u{ text-decoration:none; font-size:10px; letter-spacing:0; text-transform:none; color:var(--dim2); font-weight:500; }
+
+  .srcrow{ display:flex; align-items:center; gap:12px; }
+  .srcchip{
+    height:32px; padding:0 12px; border-radius:7px; display:inline-flex; align-items:center; gap:8px;
+    background:var(--panel3); border:1px solid var(--line2); font-size:13px; font-weight:600;
+  }
+  .seg{ display:flex; background:var(--panel3); border:1px solid var(--line2); border-radius:7px; padding:2px; gap:2px; }
+  .seg button{
+    height:26px; padding:0 13px; border:0; border-radius:5px; background:transparent; cursor:pointer;
+    font-family:var(--sans); font-size:11.5px; font-weight:600; color:var(--dim);
+  }
+  .seg button.on{ background:var(--accent); color:#04211E; }
+  .seg.sm button{ height:22px; padding:0 9px; font-size:10.5px; }
+
+  .chkline{ display:flex; align-items:center; gap:8px; font-size:11.5px; color:var(--dim); margin-left:auto; }
+  .chkbx{
+    width:14px; height:14px; border-radius:4px; flex:none;
+    border:1px solid var(--line2); background:var(--panel3);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .chkbx.on{ background:var(--accent); border-color:var(--accent); }
+
+  /* filter rows */
+  .rows{ border:1px solid var(--line); border-radius:9px; overflow:hidden; background:var(--panel2); }
+  .r{
+    display:flex; align-items:center; gap:11px; height:38px; padding:0 12px;
+    border-bottom:1px solid var(--line);
+  }
+  .r:last-child{ border-bottom:0; }
+  .r .sw{ width:8px; height:8px; border-radius:2px; flex:none; }
+  .r .nm{ font-size:12.5px; color:var(--text); }
+  .r .note{ font-size:10.5px; color:var(--dim2); }
+  .r .ct{ font-family:var(--mono); font-size:12px; color:var(--dim); margin-left:auto; }
+  .r.off .nm{ color:var(--dim2); }
+  .r.off .sw{ opacity:.3; }
+
+  .switch{
+    width:32px; height:18px; border-radius:10px; flex:none; position:relative;
+    background:var(--panel3); border:1px solid var(--line2);
+  }
+  .switch i{ position:absolute; top:2px; left:2px; width:12px; height:12px; border-radius:50%; background:#5A6873; }
+  .switch.on{ background:rgba(53,211,193,.9); border-color:var(--accent); }
+  .switch.on i{ left:auto; right:2px; background:#04211E; }
+
+  .queuesum{
+    display:flex; align-items:center; gap:9px; margin-top:10px;
+    font-size:11.5px; color:var(--dim);
+  }
+  .queuesum b{ font-family:var(--mono); color:var(--text); font-weight:600; }
+  .qbar{ flex:1; height:6px; border-radius:3px; display:flex; gap:2px; }
+  .qbar i{ height:6px; border-radius:2px; }
+
+  /* playback rows */
+  .prow{ display:flex; align-items:center; gap:11px; height:32px; }
+  .prow .nm{ font-size:12.5px; color:var(--text); }
+  .prow .note{ font-size:10.5px; color:var(--dim2); }
+  .prow .rt{ margin-left:auto; display:flex; align-items:center; gap:9px; }
+  .stepper{
+    display:inline-flex; align-items:center; height:24px; border-radius:6px;
+    background:var(--panel3); border:1px solid var(--line2); overflow:hidden;
+  }
+  .stepper b{ font-family:var(--mono); font-size:11.5px; font-weight:600; padding:0 10px; color:var(--text); }
+  .stepper span{ width:22px; height:22px; display:flex; align-items:center; justify-content:center; color:var(--dim); font-size:12px; border-left:1px solid var(--line2); }
+
+  /* keyboard grid */
+  .keys{ display:grid; grid-template-columns:repeat(3, 1fr); gap:9px 18px; }
+  .kr{ display:flex; align-items:center; gap:8px; height:20px; }
+  .kr .kk{ display:inline-flex; gap:3px; flex:none; }
+  .kr em{ font-style:normal; font-size:11px; color:var(--dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+  .dfoot{
+    flex:0 0 62px; margin-top:auto; display:flex; align-items:center; gap:10px;
+    padding:0 22px; border-top:1px solid var(--line); background:var(--panel2);
+  }
+  .dfoot .reset{
+    height:32px; padding:0 12px; border-radius:7px; cursor:pointer;
+    background:transparent; border:1px solid var(--line2); color:var(--dim);
+    font-family:var(--sans); font-size:11.5px; font-weight:600;
+  }
+  .dfoot .grow{ flex:1; }
+  .dfoot .save{
+    height:34px; padding:0 15px; border-radius:7px; cursor:pointer;
+    background:transparent; border:1px solid var(--line2); color:var(--dim);
+    font-family:var(--sans); font-size:12px; font-weight:600;
+  }
+  .dfoot .apply{
+    height:34px; padding:0 17px; border-radius:7px; cursor:pointer; border:0;
+    background:linear-gradient(180deg,#3EE0CD,#16B0A0); color:#03211E;
+    font-family:var(--sans); font-size:12.5px; font-weight:700;
+    display:inline-flex; align-items:center; gap:8px;
+  }
+  .dfoot .apply kbd{ background:rgba(3,33,30,.16); border-color:rgba(3,33,30,.3); color:#03211E; border-bottom-width:2px; }
+</style>
+</head>
+<body>
+
+<!-- ============ BACKDROP: THE DECK ============ -->
+<div class="app">
+  <div class="toprail">
+    <div class="mark">
+      <svg width="14" height="14" viewBox="0 0 14 14">
+        <rect x="1" y="1.5" width="12" height="3" rx="1" fill="#04211E"/>
+        <rect x="1" y="5.8" width="12" height="3" rx="1" fill="#04211E" opacity=".6"/>
+        <rect x="1" y="10.1" width="12" height="3" rx="1" fill="#04211E" opacity=".3"/>
+      </svg>
+    </div>
+    <div class="vsep"></div>
+    <div class="source">
+      <div class="sr">r/EarthPorn</div>
+      <div class="pill">Hot</div>
+      <div class="pill"><span class="livedot"></span>Tab live</div>
+    </div>
+    <div class="vsep"></div>
+    <div class="qnum"><b>18</b><span>of 43 loaded</span></div>
+  </div>
+
+  <div class="stagewrap">
+    <div class="grid"></div>
+    <div class="stage"><img src="photo-landscape.svg" alt=""></div>
+  </div>
+
+  <div class="meta">
+    <div class="typebadge"><span class="t">IMG</span></div>
+    <div style="min-width:0; flex:1">
+      <div class="mtitle">Alpenglow over the north ridge, forty minutes before the storm rolled in</div>
+      <div class="mrow">
+        <span>r/EarthPorn</span><span class="dot"></span>
+        <span>u/example_user</span><span class="dot"></span>
+        <span class="sc">4.2k &#9650;</span><span class="dot"></span>
+        <span>318 comments</span><span class="dot"></span><span>6h ago</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="strip">
+    <div class="rowtiles">
+      <div class="tile seen">
+        <div class="thumb" style="background-image:url(photo-portrait.svg)"><span class="tflag">IMG</span></div>
+        <div class="tcap"><b>14</b><span>Fog bank, valley floor</span></div>
+      </div>
+      <div class="tile seen">
+        <div class="thumb" style="background-image:url(photo-landscape.svg)"><span class="tflag">VID</span></div>
+        <div class="tcap"><b>15</b><span>Timelapse, ridge line</span></div>
+      </div>
+      <div class="tile seen">
+        <div class="thumb">
+          <div class="texttile"><i style="width:88%"></i><i style="width:96%"></i><i style="width:71%"></i><i style="width:84%"></i></div>
+          <span class="tflag">TXT</span>
+        </div>
+        <div class="tcap"><b>16</b><span>Trip report: three days</span></div>
+      </div>
+      <div class="tile seen">
+        <div class="thumb">
+          <div class="nsfwblur" style="background-image:url(photo-portrait.svg)"></div>
+          <span class="nsfwtag"><i>18+</i></span>
+        </div>
+        <div class="tcap"><b>17</b><span>Hidden &middot; press R</span></div>
+      </div>
+      <div class="tile cur">
+        <div class="thumb" style="background-image:url(photo-landscape.svg)"><span class="tflag">IMG</span></div>
+        <div class="tcap"><b>18</b><span>Alpenglow over the north&#8230;</span></div>
+      </div>
+      <div class="tile">
+        <div class="thumb" style="background-image:url(photo-portrait.svg)"><span class="tflag">IMG</span></div>
+        <div class="tcap"><b>19</b><span>Sea stacks at low tide</span></div>
+      </div>
+      <div class="tile dropped">
+        <div class="thumb"><div class="linktile">nps.gov</div><span class="tflag">LINK</span></div>
+        <div class="tcap"><b>&mdash;</b><span>excluded by filter</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="keyline">
+    <span class="kg"><kbd>&#8592;</kbd><kbd>&#8594;</kbd><em>step</em></span>
+    <span class="kg"><kbd>Space</kbd><em>auto-advance</em></span>
+    <span class="kg"><kbd>&#8593;</kbd><kbd>&#8595;</kbd><em>vote</em></span>
+    <span class="kg"><kbd>S</kbd><em>save</em></span>
+    <span class="kg"><kbd>F</kbd><em>filters</em></span>
+  </div>
+</div>
+
+<div class="scrim"></div>
+
+<!-- failure toast: the message the current build throws to the console -->
+<div class="failtoast">
+  <div class="ft1">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#FF6B6B" stroke-width="1.5" stroke-linecap="round">
+      <circle cx="7" cy="7" r="5.6"/><path d="M7 4.1v3.4M7 9.7v.1"/>
+    </svg>
+    Upvote was not sent
+  </div>
+  <div class="ft2">You&rsquo;re signed out of Reddit in this browser. The vote has been rolled back &mdash; the score below is unchanged.</div>
+  <div class="ftacts">
+    <button class="ftbtn">Open Reddit sign-in &#8599;</button>
+    <button class="ftbtn ghost">Dismiss &middot; Esc</button>
+  </div>
+</div>
+
+<!-- ============ DRAWER ============ -->
+<div class="drawer">
+
+  <div class="dhead">
+    <svg width="17" height="17" viewBox="0 0 14 14" fill="none" stroke="#35D3C1" stroke-width="1.3">
+      <circle cx="7" cy="7" r="2.3"/>
+      <path d="M7 .9v1.6M7 11.5v1.6M1.4 7h1.6M11 7h1.6M3.1 3.1l1.1 1.1M9.8 9.8l1.1 1.1M10.9 3.1L9.8 4.2M4.2 9.8l-1.1 1.1" stroke-linecap="round"/>
+    </svg>
+    <div>
+      <h1>Deck settings</h1>
+      <div class="hs">Changes apply live to the running deck</div>
+    </div>
+    <div class="esc">close <kbd>Esc</kbd></div>
+  </div>
+
+  <div class="dbody">
+
+    <!-- SOURCE -->
+    <div class="sect">
+      <h2>Source &amp; sort <i></i></h2>
+      <div class="srcrow">
+        <span class="srcchip"><span class="livedot"></span>r/EarthPorn</span>
+        <div class="seg">
+          <button class="on">Hot</button><button>New</button><button>Top</button><button>Rising</button>
+        </div>
+        <span class="chkline">
+          <span class="chkbx on"><svg width="9" height="9" viewBox="0 0 8 8" fill="none" stroke="#04211E" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M1.4 4.2l1.8 1.8L6.7 2.3"/></svg></span>
+          default
+        </span>
+      </div>
+    </div>
+
+    <!-- FILTERS -->
+    <div class="sect">
+      <h2>Queue filters <i></i><u>counted from 46 scanned</u></h2>
+      <div class="rows">
+
+        <div class="r">
+          <span class="sw" style="background:var(--accent)"></span>
+          <span class="nm">Images</span>
+          <span class="note">jpg &middot; png &middot; gif &middot; galleries split per frame</span>
+          <span class="ct">28</span>
+          <span class="switch on"><i></i></span>
+        </div>
+
+        <div class="r">
+          <span class="sw" style="background:var(--vid)"></span>
+          <span class="nm">Video</span>
+          <span class="note">v.redd.it &middot; redgifs &middot; embeds</span>
+          <span class="ct">9</span>
+          <span class="switch on"><i></i></span>
+        </div>
+
+        <div class="r">
+          <span class="sw" style="background:var(--txt)"></span>
+          <span class="nm">Text posts</span>
+          <span class="note">rendered as a readable card</span>
+          <span class="ct">4</span>
+          <span class="switch on"><i></i></span>
+        </div>
+
+        <div class="r off">
+          <span class="sw" style="background:var(--lnk)"></span>
+          <span class="nm">Link posts</span>
+          <span class="note">no media to show &mdash; skipped</span>
+          <span class="ct">2</span>
+          <span class="switch"><i></i></span>
+        </div>
+
+        <div class="r">
+          <span class="sw" style="background:var(--nsfw)"></span>
+          <span class="nm">NSFW &amp; spoilers</span>
+          <span class="ct">3</span>
+          <div class="seg sm" style="margin-left:14px">
+            <button>Show</button><button class="on">Blur</button><button>Hide</button>
+          </div>
+        </div>
+
+        <div class="r">
+          <span class="sw" style="background:#4B5866"></span>
+          <span class="nm">Hide posts already seen</span>
+          <span class="note">this deck &middot; 17 marked</span>
+          <span class="ct">17</span>
+          <span class="switch"><i></i></span>
+        </div>
+
+      </div>
+
+      <div class="queuesum">
+        <span><b>41</b> in queue</span>
+        <span class="qbar">
+          <i style="flex:28; background:var(--accent)"></i>
+          <i style="flex:9;  background:var(--vid)"></i>
+          <i style="flex:4;  background:var(--txt)"></i>
+          <i style="flex:3;  background:var(--nsfw)"></i>
+          <i style="flex:2;  background:#2C353D"></i>
+        </span>
+        <span><b>3</b> blurred &middot; <b>2</b> excluded</span>
+      </div>
+    </div>
+
+    <!-- PLAYBACK -->
+    <div class="sect">
+      <h2>Playback <i></i></h2>
+
+      <div class="prow">
+        <span class="nm">Auto-advance images after</span>
+        <span class="rt">
+          <div class="seg sm">
+            <button>Off</button><button>3s</button><button class="on">5s</button><button>8s</button><button>15s</button>
+          </div>
+        </span>
+      </div>
+
+      <div class="prow">
+        <span class="nm">Videos play to the end</span>
+        <span class="note">ignores the timer above</span>
+        <span class="rt"><span class="switch on"><i></i></span></span>
+      </div>
+
+      <div class="prow">
+        <span class="nm">Embeds advance after</span>
+        <span class="note">no end event is available</span>
+        <span class="rt">
+          <span class="stepper"><b>15s</b><span>&minus;</span><span>+</span></span>
+        </span>
+      </div>
+
+      <div class="prow">
+        <span class="nm">Respect system reduced motion</span>
+        <span class="note">detected: reduce &mdash; crossfades off</span>
+        <span class="rt"><span class="switch on"><i></i></span></span>
+      </div>
+    </div>
+
+    <!-- KEYBOARD -->
+    <div class="sect">
+      <h2>Keyboard <i></i><u>always visible along the bottom rail</u></h2>
+      <div class="keys">
+        <div class="kr"><span class="kk"><kbd>&#8592;</kbd><kbd>&#8594;</kbd></span><em>Previous / next</em></div>
+        <div class="kr"><span class="kk"><kbd>&#8679;</kbd><kbd>&#8594;</kbd></span><em>Jump 10 forward</em></div>
+        <div class="kr"><span class="kk"><kbd>Home</kbd></span><em>Back to first</em></div>
+
+        <div class="kr"><span class="kk"><kbd>Space</kbd></span><em>Auto-advance</em></div>
+        <div class="kr"><span class="kk"><kbd>&#8593;</kbd><kbd>&#8595;</kbd></span><em>Upvote / downvote</em></div>
+        <div class="kr"><span class="kk"><kbd>S</kbd></span><em>Save / unsave</em></div>
+
+        <div class="kr"><span class="kk"><kbd>O</kbd></span><em>Open post in a tab</em></div>
+        <div class="kr"><span class="kk"><kbd>R</kbd></span><em>Reveal blurred media</em></div>
+        <div class="kr"><span class="kk"><kbd>M</kbd></span><em>Mute / unmute</em></div>
+
+        <div class="kr"><span class="kk"><kbd>T</kbd></span><em>Show / hide filmstrip</em></div>
+        <div class="kr"><span class="kk"><kbd>F</kbd></span><em>Filters &amp; settings</em></div>
+        <div class="kr"><span class="kk"><kbd>Z</kbd></span><em>Fit / fill the frame</em></div>
+
+        <div class="kr"><span class="kk"><kbd>1</kbd>&#8211;<kbd>9</kbd></span><em>Jump to strip tile</em></div>
+        <div class="kr"><span class="kk"><kbd>?</kbd></span><em>This panel</em></div>
+        <div class="kr"><span class="kk"><kbd>Esc</kbd></span><em>Close the deck</em></div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="dfoot">
+    <button class="reset">Reset to defaults</button>
+    <span class="grow"></span>
+    <button class="save">Save as my default</button>
+    <button class="apply">Done <kbd>Esc</kbd></button>
+  </div>
+
+</div>
+
+</body>
+</html>

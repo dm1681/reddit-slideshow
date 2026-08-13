@@ -75,10 +75,15 @@ fi
 # --keep-profile-changes runs against the profile in place instead of copying
 # it, which is the point here: the existing Reddit login is what makes the
 # slideshow worth testing. web-ext does write dev prefs into it.
+# "${DEBUG_ARGS[@]+...}" rather than "${DEBUG_ARGS[@]}": macOS ships bash 3.2,
+# where expanding an empty array under `set -u` is an "unbound variable" error
+# rather than nothing at all. That fired on every run without ZEN_DEBUG_PORT —
+# which is the normal way to use this. Fixed in bash 4.4, so it never showed up
+# anywhere with a newer bash on PATH.
 exec npx web-ext run \
   --source-dir . \
   --firefox "$ZEN_BIN" \
   --firefox-profile "$ZEN_PROFILE" \
   --keep-profile-changes \
-  "${DEBUG_ARGS[@]}" \
+  ${DEBUG_ARGS[@]+"${DEBUG_ARGS[@]}"} \
   "$@"

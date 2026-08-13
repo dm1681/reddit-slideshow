@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Reddit Slideshow — current</title>
+  <link rel="stylesheet" href="../../../slideshow/slideshow.css">
+  <style>
+    /* harness only: give the content container a stand-in image */
+    #content-container img { opacity: 1; }
+  </style>
+</head>
+<body>
+  <div id="top-bar" class="controls">
+    <span id="progress">7 / 42</span>
+    <div id="top-bar-right">
+      <button id="upvote-btn" class="active" title="Upvote (↑)">▲</button>
+      <button id="downvote-btn" title="Downvote (↓)">▼</button>
+      <button id="save-btn" title="Save to Reddit (S)">☆</button>
+      <button id="auto-advance-btn" title="Toggle auto-advance">⏱ Off</button>
+      <button id="popout-btn" title="Pop out to window">↗</button>
+      <button id="close-btn" title="Close slideshow">✕</button>
+    </div>
+  </div>
+
+  <button id="prev-btn" class="nav-arrow controls" title="Previous (←)">‹</button>
+  <button id="next-btn" class="nav-arrow controls" title="Next (→)">›</button>
+
+  <div id="content-container"><img src="placeholder.svg" class="loaded" alt=""></div>
+
+  <div id="post-info" class="controls">
+    <div id="post-title">Golden hour over the ridge line after three days of rain</div>
+    <div id="post-meta">r/EarthPorn · u/example_user · 12.4k points · 284 comments</div>
+  </div>
+
+  <div id="progress-bar">
+    <div id="progress-bar-fill" style="width:16.6%"></div>
+  </div>
+</body>
+</html>

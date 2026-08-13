@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Cinema — slideshow</title>
+<style>
+
+  html, body { margin: 0; padding: 0; overflow: hidden; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #000;
+    color: #F5F2ED;
+    -webkit-font-smoothing: antialiased;
+    font-variant-numeric: tabular-nums;
+  }
+  .micro {
+    font-size: 10px; font-weight: 700; letter-spacing: .18em;
+    text-transform: uppercase; color: #8B8378;
+  }
+
+
+  :root {
+    --amber:   #FFC24B;
+    --amber-d: #C98F1F;
+    --up:      #FF6338;
+    --paper:   #F7F4EF;
+    --paper-2: #BEB7AC;
+    --paper-3: #8B8378;
+    --glass:   rgba(16,15,14,.72);
+    --hair:    rgba(255,255,255,.11);
+    --hair-2:  rgba(255,255,255,.06);
+  }
+
+  body { width: 1440px; height: 900px; position: relative; }
+
+  /* ---- ambient bleed: the frame's own colour spills into the letterbox ---- */
+  .bleed {
+    position: absolute; inset: -8%;
+    background: url(photo-landscape.svg) center/cover no-repeat;
+    filter: blur(90px) saturate(1.9) brightness(.52);
+    transform: scale(1.18);
+  }
+  .bleed-vignette {
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(122% 88% at 50% 42%, rgba(0,0,0,0) 32%, rgba(0,0,0,.66) 100%),
+      linear-gradient(180deg, rgba(0,0,0,.36) 0%, rgba(0,0,0,0) 24%);
+  }
+
+  /* ---- the media ---- */
+  .stage {
+    position: absolute; left: 40px; right: 40px; top: 30px; bottom: 176px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .stage img {
+    max-width: 100%; max-height: 100%; display: block; border-radius: 3px;
+    box-shadow: 0 34px 110px rgba(0,0,0,.66), 0 0 0 1px rgba(255,255,255,.07);
+  }
+
+  /* ---- scrim: chrome must survive a white r/pics frame ---- */
+  .scrim {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 340px; pointer-events: none;
+    background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,.30) 42%, rgba(0,0,0,.76) 100%);
+  }
+
+  /* ---- camera slate: transient frame counter after each cut ---- */
+  .slate { position: absolute; top: 30px; left: 40px; }
+  .slate-box {
+    display: flex; align-items: flex-end; gap: 10px; padding: 11px 15px 10px;
+    background: rgba(0,0,0,.44); border: 1px solid rgba(255,255,255,.10);
+    border-left: 2px solid var(--amber); border-radius: 3px;
+    backdrop-filter: blur(14px);
+  }
+  .slate-n { font-size: 30px; font-weight: 700; line-height: .84; color: var(--paper); letter-spacing: -.02em; }
+  .slate-of { font-size: 11px; font-weight: 600; color: var(--paper-3); line-height: 1.5; letter-spacing: .03em; }
+  .slate-of b { color: var(--paper-2); font-weight: 700; }
+  .slate-cap {
+    margin-top: 9px; font-size: 9px; letter-spacing: .13em; text-transform: uppercase;
+    color: rgba(255,255,255,.32); font-weight: 700; white-space: nowrap;
+  }
+
+  /* ---- state annotations ---- */
+  .note {
+    position: absolute; top: 34px; right: 40px; width: 152px; text-align: right;
+    font-size: 9px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+    color: rgba(255,255,255,.34); line-height: 2;
+  }
+  .note b { color: var(--amber); font-weight: 700; opacity: .82; }
+
+  /* ---- the console: ONE glass object, not four scattered widgets ---- */
+  .console {
+    position: absolute; left: 84px; right: 84px; bottom: 28px;
+    background: var(--glass);
+    backdrop-filter: blur(30px) saturate(1.5);
+    border: 1px solid var(--hair); border-radius: 16px;
+    box-shadow: 0 24px 70px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.07);
+    overflow: hidden;
+  }
+  .tierA { display: flex; align-items: center; gap: 34px; padding: 18px 22px 17px 24px; }
+
+  .titleblock { flex: 1; min-width: 0; }
+  .ptitle {
+    font-size: 22px; font-weight: 600; line-height: 1.24; letter-spacing: -.014em; color: var(--paper);
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .pmeta { margin-top: 8px; display: flex; align-items: center; gap: 9px;
+           font-size: 12.5px; color: var(--paper-2); font-weight: 500; }
+  .pmeta .sub { color: var(--paper); font-weight: 650; }
+  .pmeta .dot { width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,.28); flex: none; }
+
+  /* ---- action cluster ---- */
+  .actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .btn {
+    height: 34px; display: inline-flex; align-items: center; gap: 7px; padding: 0 12px;
+    border-radius: 8px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.10);
+    color: var(--paper-2); font-size: 12.5px; font-weight: 600;
+    font-family: inherit; cursor: pointer; white-space: nowrap;
+  }
+  .btn .g { font-size: 13px; line-height: 1; }
+  .btn.sq { width: 34px; padding: 0; justify-content: center; }
+  .btn.on { background: rgba(255,194,75,.17); border-color: rgba(255,194,75,.50); color: var(--amber); }
+  .btn.focused {
+    outline: 2px solid #fff; outline-offset: 3px;
+    box-shadow: 0 0 0 6px rgba(0,0,0,.55); color: var(--paper);
+  }
+
+  .votepill {
+    display: flex; align-items: center; height: 34px; border-radius: 8px; overflow: hidden;
+    background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.10);
+  }
+  .votepill button {
+    width: 32px; height: 100%; background: none; border: 0; cursor: pointer;
+    color: var(--paper-2); font-size: 11px; font-family: inherit;
+  }
+  .votepill button.up.on { background: rgba(255,99,56,.22); color: var(--up); }
+  .votepill .score {
+    padding: 0 9px; height: 100%; display: flex; align-items: center; gap: 5px;
+    font-size: 12.5px; font-weight: 700; color: var(--up);
+    border-left: 1px solid rgba(255,255,255,.09); border-right: 1px solid rgba(255,255,255,.09);
+  }
+  .votepill .score em {
+    font-style: normal; font-size: 9.5px; font-weight: 800; letter-spacing: .04em;
+    color: #17130C; background: var(--up); border-radius: 3px; padding: 2px 4px;
+  }
+
+  .vrule { width: 1px; height: 22px; background: var(--hair); }
+
+  /* ---- tier B: the reel — position, not a percentage ---- */
+  .tierB {
+    display: flex; align-items: center; gap: 18px; padding: 11px 22px 12px 24px;
+    border-top: 1px solid var(--hair-2); background: rgba(0,0,0,.20);
+  }
+  .frame-lab { display: flex; align-items: baseline; gap: 6px; flex: none; }
+  .frame-lab b { font-size: 13px; font-weight: 700; color: var(--amber); }
+  .frame-lab span {
+    font-size: 10px; font-weight: 700; letter-spacing: .13em;
+    text-transform: uppercase; color: var(--paper-3); white-space: nowrap;
+  }
+
+  .ticks { flex: 1; display: flex; align-items: flex-end; gap: 3px; height: 12px; }
+  .ticks i { flex: 1; height: 3px; display: block; border-radius: 1px; background: rgba(255,255,255,.17); }
+  .ticks i.seen { background: rgba(255,255,255,.44); }
+  .ticks i.now {
+    flex: 1.7; height: 12px; border-radius: 1.5px; background: var(--amber);
+    box-shadow: 0 0 11px rgba(255,194,75,.7);
+  }
+
+  .frontier {
+    display: flex; align-items: center; gap: 7px; flex: none;
+    padding-left: 13px; border-left: 1px dashed rgba(255,255,255,.22);
+  }
+  .frontier .pip {
+    width: 6px; height: 6px; border-radius: 50%; flex: none;
+    background: var(--amber); box-shadow: 0 0 8px rgba(255,194,75,.85);
+  }
+  .frontier span {
+    font-size: 10px; font-weight: 700; letter-spacing: .13em;
+    text-transform: uppercase; color: var(--paper-3); white-space: nowrap;
+  }
+</style></head>
+<body>
+  <div class="bleed"></div>
+  <div class="bleed-vignette"></div>
+
+  <div class="stage"><img src="photo-landscape.svg" alt=""></div>
+
+  <div class="scrim"></div>
+
+  <div class="slate">
+    <div class="slate-box">
+      <div class="slate-n">14</div>
+      <div class="slate-of">of <b>43</b><br>loaded</div>
+    </div>
+    <div class="slate-cap">1.2s after each cut</div>
+  </div>
+
+  <div class="note">
+    <b>chrome summoned</b><br>
+    idle = media only<br>
+    white ring = focus
+  </div>
+
+  <div class="console">
+    <div class="tierA">
+      <div class="titleblock">
+        <div class="ptitle">First light on Tarn Hollow ridge after three days of rain</div>
+        <div class="pmeta">
+          <span class="sub">r/EarthPorn</span>
+          <i class="dot"></i><span>u/example_user</span>
+          <i class="dot"></i><span>Image</span>
+        </div>
+      </div>
+
+      <div class="actions">
+        <div class="votepill">
+          <button class="up on" title="Upvoted — press &#8593; again to undo">&#9650;</button>
+          <span class="score">4,312 <em>+1</em></span>
+          <button class="down" title="Downvote (&#8595;)">&#9660;</button>
+        </div>
+        <button class="btn on"><span class="g">&#9733;</span> Saved</button>
+        <button class="btn focused"><span class="g">&#8599;</span> Open post</button>
+        <span class="vrule"></span>
+        <button class="btn on" title="Auto-advance on — 5s for this image">
+          <svg width="15" height="15" viewBox="0 0 18 18" aria-hidden="true">
+            <circle cx="9" cy="9" r="7" fill="none" stroke="rgba(255,194,75,.28)" stroke-width="2"/>
+            <circle cx="9" cy="9" r="7" fill="none" stroke="#FFC24B" stroke-width="2"
+                    stroke-linecap="round" stroke-dasharray="43.98" stroke-dashoffset="17.6"
+                    transform="rotate(-90 9 9)"/>
+          </svg>
+          Auto &middot; 5s
+        </button>
+        <button class="btn"><span class="g">?</span> Reel</button>
+        <button class="btn sq" title="Pop out to a window">&#8599;&#8600;</button>
+        <button class="btn sq" title="Close (Esc)">&#10005;</button>
+      </div>
+    </div>
+
+    <div class="tierB">
+      <div class="frame-lab"><b>14</b><span>/ 43 loaded</span></div>
+      <div class="ticks"><i class="tick seen"></i><i class="tick seen"></i><i class="tick seen"></i><i class="tick seen"></i><i class="tick seen"></i><i class="tick seen"></i><i class="tick seen"></i><i class="tick seen"></i><i class="tick seen"></i><i class="tick seen"></i><i class="tick seen"></i><i class="tick seen"></i><i class="tick seen"></i><i class="tick now"></i><i class="tick"></i><i class="tick"></i><i class="tick"></i><i class="tick"></i><i class="tick"></i><i class="tick"></i><i class="tick"></i><i class="tick"></i><i class="tick"></i><i class="tick"></i><i class="tick"></i><i class="tick"></i><i class="tick"></i><i class="tick"></i><i class="tick"></i><i class="tick"></i><i class="tick"></i><i class="tick"></i><i class="tick"></i><i class="tick"></i><i class="tick"></i><i class="tick"></i><i class="tick"></i><i class="tick"></i><i class="tick"></i><i class="tick"></i><i class="tick"></i><i class="tick"></i><i class="tick"></i></div>
+      <div class="frontier"><i class="pip"></i><span>more arriving</span></div>
+    </div>
+  </div>
+</body></html>

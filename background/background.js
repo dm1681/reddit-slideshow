@@ -127,6 +127,8 @@ browser.runtime.onMessage.addListener((message, sender) => {
   switch (message.type) {
     case "startSlideshow":
       return handleStartSlideshow();
+    case "scanOnly":
+      return handleScanOnly();
     case "getCurrentState":
       return handleGetCurrentState();
     case "getPosts":
@@ -134,6 +136,8 @@ browser.runtime.onMessage.addListener((message, sender) => {
     case "savePost":
     case "votePost":
       return relayToTab(message);
+    case "openPost":
+      return handleOpenPost(message);
     case "popOut":
       return handlePopOut(sender);
     case "closeSlideshow":
@@ -197,6 +201,20 @@ async function doStartSlideshow() {
     console.error("[reddit-slideshow] scrapeAndStart error:", e);
     session = null;
     return { error: "Could not start slideshow. Make sure you're on a Reddit page." };
+  }
+}
+
+// A read-only look at the active tab for the popup, so it can say what will
+// happen before the viewer commits to it. Starts nothing and touches no
+// session state.
+async function handleScanOnly() {
+  const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+  if (tabs.length === 0) return { error: "No active tab" };
+  try {
+    return await browser.tabs.sendMessage(tabs[0].id, { type: "scanOnly" });
+  } catch (e) {
+    // No content script here — not a Reddit page, or one that has not loaded.
+    return { error: "Not a Reddit page" };
   }
 }
 
@@ -276,6 +294,24 @@ async function relayToTab(message) {
     return result || { error: "No response from the Reddit tab" };
   } catch (e) {
     return { error: "The Reddit tab is gone — reopen the slideshow" };
+  }
+}
+
+// Opened from here rather than from the slideshow: in overlay mode the
+// slideshow is an iframe, and routing through the background keeps one code
+// path for both modes.
+async function handleOpenPost(message) {
+  const url = message && message.url;
+  if (!url || !/^https:\/\/(www\.|old\.|new\.)?reddit\.com\//.test(url)) {
+    return { error: "No link for this post" };
+  }
+  try {
+    // Opened alongside rather than in front: the slideshow is still running,
+    // and stealing focus would end the session the viewer is in the middle of.
+    await browser.tabs.create({ url, active: false });
+    return { success: true };
+  } catch (e) {
+    return { error: "Could not open the post" };
   }
 }
 

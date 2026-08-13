@@ -6,38 +6,120 @@
   <title>Reddit Slideshow</title>
   <link rel="stylesheet" href="slideshow.css">
 </head>
-<body>
-  <!-- Top bar: progress, auto-advance, pop-out, close -->
-  <div id="top-bar" class="controls">
-    <span id="progress">0 / 0</span>
-    <div id="top-bar-right">
-      <button id="upvote-btn" title="Upvote (↑)">▲</button>
-      <button id="downvote-btn" title="Downvote (↓)">▼</button>
-      <button id="save-btn" title="Save to Reddit (S)">☆</button>
-      <button id="auto-advance-btn" title="Toggle auto-advance">⏱ Off</button>
-      <button id="popout-btn" title="Pop out to window">↗</button>
-      <button id="close-btn" title="Close slideshow">✕</button>
+<!-- tabindex so the page itself can hold focus: in overlay mode this is an
+     iframe on reddit.com, and until something here is focused every keypress
+     goes to the Reddit page behind it. -->
+<body tabindex="-1">
+  <!-- Main content area — renderers populate this. Full-bleed: the console
+       floats over the scrim rather than the stage being inset for it. -->
+  <div id="content-container"></div>
+
+  <!-- Page-level scrim. Not a child of the media: parented to the stage it
+       would not cover console edges that extend past a portrait frame. -->
+  <div id="scrim" aria-hidden="true"></div>
+
+  <!-- One console, replacing the top bar, the two floating arrows, the post
+       caption and the progress hairline. -->
+  <div id="console" class="controls">
+    <div id="console-main">
+      <div id="titleblock">
+        <h1 id="post-title"></h1>
+        <p id="post-meta"></p>
+      </div>
+
+      <div id="actions" role="toolbar" aria-label="Post and playback controls">
+        <div id="step">
+          <button id="prev-btn" type="button" aria-label="Previous post" title="Previous (←)">‹</button>
+          <button id="next-btn" type="button" aria-label="Next post" title="Next (→)">›</button>
+        </div>
+
+        <div id="votepill">
+          <button id="upvote-btn" type="button" aria-pressed="false" aria-label="Upvote" title="Upvote (↑)">▲</button>
+          <span id="score" aria-hidden="true"></span>
+          <button id="downvote-btn" type="button" aria-pressed="false" aria-label="Downvote" title="Downvote (↓)">▼</button>
+        </div>
+
+        <button id="save-btn" class="labelled" type="button" aria-pressed="false" title="Save to Reddit (S)">
+          <span class="glyph" aria-hidden="true">☆</span><span class="text">Save</span>
+        </button>
+
+        <button id="open-btn" class="labelled" type="button" title="Open the post on Reddit (O)">
+          <span class="glyph" aria-hidden="true">↗</span><span class="text">Open post</span>
+        </button>
+
+        <span class="vrule" aria-hidden="true"></span>
+
+        <button id="auto-advance-btn" class="labelled" type="button" aria-pressed="false" title="Auto-advance off — press Space to start">⏱ Off</button>
+        <button id="reel-btn" type="button" aria-expanded="false" aria-controls="reel" aria-label="Keys and settings" title="Keys and settings (?)">?</button>
+        <button id="fullscreen-btn" type="button" aria-pressed="false" aria-label="Fullscreen" title="Fullscreen (F)">⛶</button>
+        <button id="popout-btn" type="button" aria-label="Open in its own window" title="Pop out to window">↗</button>
+        <button id="close-btn" type="button" aria-label="Close slideshow" title="Close slideshow (Esc)">✕</button>
+      </div>
+    </div>
+
+    <div id="console-rail">
+      <!-- Position is announced, so a screen reader hears the slide change. -->
+      <span id="progress" role="status" aria-live="polite" aria-atomic="true">0 / 0</span>
+      <div id="ticks" aria-hidden="true"></div>
+      <span id="rail-note" aria-hidden="true"></span>
     </div>
   </div>
 
-  <!-- Navigation arrows -->
-  <button id="prev-btn" class="nav-arrow controls" title="Previous (←)">‹</button>
-  <button id="next-btn" class="nav-arrow controls" title="Next (→)">›</button>
+  <!-- The Reel: keys and playback settings. The shortcuts lived only in title
+       attributes on glyph buttons, so they were discoverable by hovering one
+       at a time and no other way. -->
+  <div id="reel" hidden role="dialog" aria-modal="true" aria-labelledby="reel-heading">
+    <div id="reel-panel">
+      <div id="reel-head">
+        <h2 id="reel-heading">Keys &amp; settings</h2>
+        <button id="reel-close" type="button" aria-label="Close">Esc</button>
+      </div>
 
-  <!-- Main content area — renderers populate this -->
-  <div id="content-container"></div>
+      <div id="reel-body">
+        <section>
+          <h3>Keys</h3>
+          <dl id="reel-keys"></dl>
+        </section>
 
-  <!-- Post info -->
-  <div id="post-info" class="controls">
-    <div id="post-title"></div>
-    <div id="post-meta"></div>
+        <section>
+          <h3>Playback</h3>
+
+          <div class="setting">
+            <div class="setting-label">
+              <span>Hold each image for</span>
+              <small>Videos always play to the end</small>
+            </div>
+            <div class="chips" role="radiogroup" aria-label="Image dwell time" data-setting="imageDwellMs"></div>
+          </div>
+
+          <div class="setting">
+            <div class="setting-label">
+              <span>Hold embedded players for</span>
+              <small>A cross-origin player cannot say when it finished, so this is a timer</small>
+            </div>
+            <div class="chips" role="radiogroup" aria-label="Embed dwell time" data-setting="embedDwellMs"></div>
+          </div>
+        </section>
+
+        <section>
+          <h3>Adult &amp; spoiler posts</h3>
+          <div class="setting">
+            <div class="setting-label">
+              <span>Hide until revealed</span>
+              <small>Media is not downloaded while a post is hidden. Press R to reveal one post. Remembered between sessions.</small>
+            </div>
+            <button id="mask-toggle" class="switch" type="button" role="switch" aria-checked="true">
+              <span class="knob" aria-hidden="true"></span>
+            </button>
+          </div>
+        </section>
+      </div>
+    </div>
   </div>
 
-  <!-- Progress bar -->
-  <div id="progress-bar">
-    <div id="progress-bar-fill"></div>
-  </div>
-
+  <script src="settings.js"></script>
+  <script src="media-failure.js"></script>
+  <script src="reel.js"></script>
   <script src="renderers/image.js"></script>
   <script src="renderers/video.js"></script>
   <script src="renderers/embed.js"></script>

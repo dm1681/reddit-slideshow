@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Deck — slideshow</title>
+<style>
+  html, body { margin:0; padding:0; overflow:hidden; }
+  *, *::before, *::after { box-sizing: border-box; }
+
+  :root{
+    --bg:      #090B0E;
+    --stage:   #0C0F13;
+    --panel:   #12161B;
+    --panel2:  #171D23;
+    --panel3:  #1E262E;
+    --line:    #232C35;
+    --line2:   #2F3A45;
+    --text:    #E7EEF4;
+    --dim:     #94A3B0;
+    --dim2:    #6C7A87;
+    --accent:  #35D3C1;
+    --accentD: #12A697;
+    --up:      #FF5A1F;
+    --nsfw:    #E0567A;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  body{
+    width:1440px; height:900px;
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .app{ display:flex; flex-direction:column; width:1440px; height:900px; }
+  .mono{ font-family:var(--mono); }
+
+  /* ================= TOP RAIL (52) ================= */
+  .toprail{
+    flex:0 0 52px; height:52px;
+    display:flex; align-items:center;
+    padding:0 16px 0 14px;
+    background:var(--panel);
+    border-bottom:1px solid var(--line);
+  }
+  .mark{
+    width:26px; height:26px; border-radius:6px; flex:none;
+    background:linear-gradient(150deg, var(--accent), var(--accentD));
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 0 0 1px rgba(53,211,193,.28), 0 2px 10px rgba(18,166,151,.28);
+  }
+  .vsep{ width:1px; height:24px; background:var(--line2); margin:0 14px; flex:none; }
+
+  .source{ display:flex; align-items:center; gap:9px; }
+  .source .sr{ font-size:14px; font-weight:650; letter-spacing:-.1px; }
+  .pill{
+    display:inline-flex; align-items:center; gap:5px; height:20px; padding:0 8px;
+    border-radius:5px; background:var(--panel3); border:1px solid var(--line2);
+    font-size:10px; font-weight:700; letter-spacing:.09em; text-transform:uppercase; color:var(--dim);
+  }
+  .livedot{ width:6px; height:6px; border-radius:50%; background:var(--accent); box-shadow:0 0 0 3px rgba(53,211,193,.16); }
+
+  .queue{ display:flex; align-items:center; gap:13px; }
+  .qnum{ display:flex; align-items:baseline; gap:5px; }
+  .qnum b{ font-family:var(--mono); font-size:21px; font-weight:600; letter-spacing:-.5px; }
+  .qnum span{ font-size:11.5px; color:var(--dim); }
+  .buffer{ width:196px; }
+  .bufbar{ display:flex; height:5px; gap:2px; }
+  .bufbar i{ display:block; height:5px; border-radius:1.5px; }
+  .bufbar .done{ flex:18; background:var(--accent); }
+  .bufbar .rest{ flex:25; background:var(--line2); }
+  .bufbar .load{ flex:12; background:repeating-linear-gradient(115deg, #3A5560 0 5px, #263741 5px 10px); }
+  .bufmeta{ display:flex; justify-content:space-between; margin-top:5px; font-size:10px; color:var(--dim2); }
+  .bufmeta em{ font-style:normal; color:var(--dim); display:inline-flex; align-items:center; gap:5px; }
+  .spin{ width:7px; height:7px; border-radius:50%; border:1.5px solid var(--line2); border-top-color:var(--accent); }
+
+  .spacer{ flex:1; }
+
+  .tbtn{
+    height:32px; padding:0 11px; border-radius:7px; cursor:pointer;
+    background:var(--panel2); border:1px solid var(--line2); color:var(--dim);
+    font-family:var(--sans); font-size:12px; font-weight:600;
+    display:inline-flex; align-items:center; gap:7px; margin-left:6px;
+  }
+  .tbtn.icon{ width:32px; padding:0; justify-content:center; }
+  .tbtn .kbd{ font-family:var(--mono); font-size:9.5px; color:var(--dim2); border:1px solid var(--line2);
+              border-radius:3px; padding:1px 4px; line-height:1; }
+  .badge{
+    min-width:16px; height:16px; padding:0 4px; border-radius:8px; background:var(--accent); color:#04211E;
+    font-family:var(--mono); font-size:10px; font-weight:700; display:inline-flex; align-items:center; justify-content:center;
+  }
+
+  .dial{
+    display:flex; align-items:center; gap:9px; height:34px; padding:0 11px 0 7px;
+    background:rgba(53,211,193,.10); border:1px solid rgba(53,211,193,.34); border-radius:8px;
+  }
+  .dial .ring svg{ display:block; transform:rotate(-90deg); }
+  .dial .t1{ font-family:var(--mono); font-size:12px; font-weight:600; color:#9DF0E5; line-height:1.2; }
+  .dial .t2{ font-size:9px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:#57A79E; line-height:1.2; }
+
+  /* ================= STAGE ================= */
+  .stagewrap{
+    flex:1 1 auto; min-height:0; position:relative;
+    background:radial-gradient(120% 90% at 50% 0%, #10151A 0%, var(--stage) 62%), var(--stage);
+    border-bottom:1px solid var(--line);
+    overflow:hidden;
+  }
+  .grid{
+    position:absolute; inset:0; opacity:.55;
+    background-image:
+      linear-gradient(to right, rgba(255,255,255,.022) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255,255,255,.022) 1px, transparent 1px);
+    background-size:48px 48px;
+  }
+  .stage{
+    position:absolute; inset:0;
+    display:flex; align-items:center; justify-content:center;
+    padding:26px 90px;
+  }
+  .frame{ position:relative; }
+  /* explicit box: an SVG with only a viewBox has no intrinsic size */
+  .frame img{
+    display:block; width:867px; height:578px;
+    border:1px solid rgba(255,255,255,.09);
+    box-shadow:0 22px 64px rgba(0,0,0,.62);
+  }
+  .corner{ position:absolute; width:13px; height:13px; border:1px solid rgba(53,211,193,.6); }
+  .c-tl{ top:-6px; left:-6px; border-right:0; border-bottom:0; }
+  .c-tr{ top:-6px; right:-6px; border-left:0; border-bottom:0; }
+  .c-bl{ bottom:-6px; left:-6px; border-right:0; border-top:0; }
+  .c-br{ bottom:-6px; right:-6px; border-left:0; border-top:0; }
+
+  .hud{ position:absolute; right:16px; bottom:12px; display:flex; gap:6px; align-items:center; }
+  .chipdark{
+    height:26px; padding:0 9px; display:inline-flex; align-items:center; gap:6px;
+    background:rgba(9,12,15,.86); border:1px solid var(--line2); border-radius:6px;
+    font-family:var(--mono); font-size:10.5px; color:var(--dim);
+  }
+  .chipdark b{ color:var(--text); font-weight:600; }
+  .chipdark.fit{ color:#8CEFE3; border-color:rgba(53,211,193,.42); background:rgba(16,54,51,.62); }
+
+  .navzone{ position:absolute; top:0; bottom:0; width:80px; display:flex; align-items:center; justify-content:center; }
+  .navzone.l{ left:0; } .navzone.r{ right:0; }
+  .navzone .chev{
+    width:40px; height:58px; border-radius:9px;
+    display:flex; align-items:center; justify-content:center;
+    color:var(--dim2); font-size:24px; line-height:1; border:1px solid transparent;
+  }
+  .navzone.r .chev{ background:rgba(255,255,255,.08); border-color:var(--line2); color:var(--text); }
+  .navzone.r{ background:linear-gradient(to left, rgba(255,255,255,.04), transparent); }
+
+  .toast{
+    position:absolute; left:16px; bottom:12px;
+    display:flex; align-items:center; gap:9px; height:32px; padding:0 12px 0 11px;
+    background:rgba(9,12,15,.93); border:1px solid var(--line2);
+    border-left:2px solid var(--accent); border-radius:7px;
+    font-size:12px; color:var(--text);
+  }
+  .toast .tick{ color:#FFC24B; font-size:12px; }
+  .toast .when{ font-family:var(--mono); font-size:10px; color:var(--dim2); }
+
+  .travel{ position:absolute; left:0; right:0; bottom:0; height:2px; background:rgba(255,255,255,.05); }
+  .travel i{ display:block; height:2px; width:38%; background:var(--accent); box-shadow:0 0 9px rgba(53,211,193,.65); }
+
+  /* ================= META STRIP (66) ================= */
+  .meta{
+    flex:0 0 66px; height:66px;
+    display:flex; align-items:center; gap:14px;
+    padding:0 16px; background:var(--panel);
+    border-bottom:1px solid var(--line);
+  }
+  .typebadge{
+    flex:none; width:44px; height:44px; border-radius:8px;
+    background:var(--panel3); border:1px solid var(--line2);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+  }
+  .typebadge .g{ line-height:0; color:var(--accent); }
+  .typebadge .t{ font-family:var(--mono); font-size:8px; letter-spacing:.06em; color:var(--dim2); }
+
+  .mtext{ min-width:0; flex:1; }
+  .mtitle{
+    font-size:15px; font-weight:620; letter-spacing:-.15px; color:#F2F7FA;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:5px;
+  }
+  .mrow{ display:flex; align-items:center; gap:9px; font-size:11.5px; color:var(--dim); }
+  .mrow .dot{ width:3px; height:3px; border-radius:50%; background:var(--line2); flex:none; }
+  .mrow a{ color:var(--dim); text-decoration:none; border-bottom:1px dotted var(--line2); }
+  .mrow .sc{ font-family:var(--mono); color:var(--up); font-weight:600; }
+  .mrow .plus{ font-family:var(--mono); font-size:10px; color:var(--up); opacity:.72; }
+
+  .acts{ display:flex; align-items:center; gap:6px; flex:none; }
+  .abtn{
+    height:34px; min-width:36px; padding:0 10px; border-radius:7px; cursor:pointer;
+    background:var(--panel2); border:1px solid var(--line2); color:var(--dim);
+    font-family:var(--sans); font-size:12px; font-weight:600;
+    display:inline-flex; align-items:center; justify-content:center; gap:6px;
+  }
+  .abtn .k{ font-family:var(--mono); font-size:9px; color:var(--dim2); }
+  .abtn.up{ background:rgba(255,90,31,.16); border-color:rgba(255,90,31,.5); color:#FF8A5C; }
+  .abtn.up .k{ color:#B4643F; }
+  .abtn.focusring{
+    outline:2px solid var(--accent); outline-offset:2px;
+    box-shadow:0 0 0 5px rgba(53,211,193,.15);
+    color:#F2F7FA;
+  }
+
+  /* ================= FILMSTRIP (116) ================= */
+  .strip{
+    flex:0 0 116px; height:116px; position:relative;
+    background:var(--panel2); border-bottom:1px solid var(--line);
+    padding:9px 0 0 16px; overflow:hidden;
+  }
+  .rowtiles{ display:flex; gap:10px; align-items:flex-start; }
+
+  .tile{ width:126px; flex:none; }
+  .thumb{
+    position:relative; width:126px; height:74px; border-radius:5px; overflow:hidden;
+    background-color:#0E1216; background-position:center; background-size:cover; background-repeat:no-repeat;
+    border:1px solid var(--line);
+  }
+  .tile.seen .thumb{ opacity:.5; }
+  .tile.cur .thumb{ border:2px solid var(--accent); box-shadow:0 0 0 3px rgba(53,211,193,.2); }
+  .tile.cur .tcap b{ color:var(--accent); }
+  .tile.cur .tcap span{ color:#CFDAE2; }
+
+  .tcap{
+    display:flex; align-items:center; gap:6px; margin-top:7px;
+    font-size:10px; color:var(--dim); white-space:nowrap; overflow:hidden;
+  }
+  .tcap b{ font-family:var(--mono); font-weight:600; color:var(--dim2); flex:none; }
+  .tcap span{ overflow:hidden; text-overflow:ellipsis; }
+  .tile.seen .tcap{ color:var(--dim2); }
+  .tick{ color:var(--accentD); font-size:9px; flex:none; }
+
+  .tflag{
+    position:absolute; left:5px; top:5px; height:15px; padding:0 5px; border-radius:3px;
+    background:rgba(6,9,12,.84); border:1px solid rgba(255,255,255,.14);
+    font-family:var(--mono); font-size:8.5px; letter-spacing:.05em; color:#CBD6DE;
+    display:inline-flex; align-items:center;
+  }
+  .tdur{
+    position:absolute; right:5px; bottom:5px; height:15px; padding:0 5px; border-radius:3px;
+    background:rgba(6,9,12,.84); font-family:var(--mono); font-size:8.5px; color:#CBD6DE;
+    display:inline-flex; align-items:center;
+  }
+  .play{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; }
+  .play i{
+    width:22px; height:22px; border-radius:50%; background:rgba(6,9,12,.6);
+    border:1px solid rgba(255,255,255,.32); display:flex; align-items:center; justify-content:center;
+    color:#fff; font-size:8px; font-style:normal; padding-left:2px;
+  }
+  .nsfwblur{ position:absolute; inset:-14px; background-position:center; background-size:cover; filter:blur(11px) saturate(.6) brightness(.62); }
+  .nsfwtag{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; }
+  .nsfwtag i{
+    height:19px; padding:0 8px; border-radius:4px; background:rgba(224,86,122,.22);
+    border:1px solid rgba(224,86,122,.65); color:#F79FB3;
+    font-family:var(--mono); font-size:9px; font-weight:700; letter-spacing:.06em; font-style:normal;
+    display:inline-flex; align-items:center;
+  }
+  .texttile{ position:absolute; inset:0; padding:12px 11px 0; background:linear-gradient(160deg,#1B232B,#131A20); }
+  .texttile i{ display:block; height:4px; border-radius:2px; background:var(--line2); margin-bottom:6px; }
+  .linktile{
+    position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
+    background:linear-gradient(160deg,#1A2027,#12181D);
+  }
+  .linktile b{ font-family:var(--mono); font-size:9.5px; color:var(--dim); font-weight:500; }
+
+  .skel .thumb{ border-style:dashed; border-color:var(--line2); background-color:#0F1419; }
+  .skel .sh{
+    position:absolute; left:14px; right:14px; top:26px; height:6px; border-radius:3px;
+    background:linear-gradient(90deg,#182028 0%,#25333E 48%,#182028 92%);
+  }
+  .skel .sh2{ top:42px; right:48px; }
+
+  .stripstatus{
+    position:absolute; right:16px; top:11px; width:172px;
+    border-left:1px solid var(--line); padding-left:14px;
+  }
+  .ssrow{ display:flex; align-items:center; gap:7px; font-size:10.5px; color:var(--dim); margin-bottom:8px; }
+  .ssrow:last-child{ margin-bottom:0; }
+  .ssrow b{ font-family:var(--mono); font-weight:600; color:var(--text); }
+  .ssdot{ width:7px; height:7px; border-radius:2px; flex:none; }
+
+  /* ================= KEY LEGEND (30) ================= */
+  .keyline{
+    flex:0 0 30px; height:30px; background:var(--panel);
+    display:flex; align-items:center; padding:0 16px;
+  }
+  .kg{ display:inline-flex; align-items:center; gap:6px; margin-right:17px; }
+  .kg em{ font-style:normal; font-size:10.5px; color:var(--dim2); }
+  kbd{
+    font-family:var(--mono); font-size:9.5px; line-height:1; color:#B9C5CE;
+    background:var(--panel3); border:1px solid var(--line2); border-bottom-width:2px;
+    border-radius:3.5px; padding:3px 5px; min-width:18px; text-align:center; display:inline-block;
+  }
+  .kdiv{ width:1px; height:14px; background:var(--line); margin-right:17px; }
+
+  /* ================= CALLOUTS ================= */
+  .callout{
+    position:absolute; z-index:30; display:flex; align-items:center;
+    height:19px; padding:0 7px; border-radius:4px;
+    background:rgba(53,211,193,.12); border:1px dashed rgba(53,211,193,.55);
+    font-family:var(--mono); font-size:9px; letter-spacing:.04em; color:#8CEFE3; white-space:nowrap;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ============ TOP RAIL ============ -->
+  <div class="toprail">
+    <div class="mark">
+      <svg width="14" height="14" viewBox="0 0 14 14">
+        <rect x="1" y="1.5" width="12" height="3" rx="1" fill="#04211E"/>
+        <rect x="1" y="5.8" width="12" height="3" rx="1" fill="#04211E" opacity=".6"/>
+        <rect x="1" y="10.1" width="12" height="3" rx="1" fill="#04211E" opacity=".3"/>
+      </svg>
+    </div>
+    <div class="vsep"></div>
+
+    <div class="source">
+      <div class="sr">r/EarthPorn</div>
+      <div class="pill">Hot</div>
+      <div class="pill"><span class="livedot"></span>Tab live</div>
+    </div>
+
+    <div class="vsep"></div>
+
+    <div class="queue">
+      <div class="qnum"><b>18</b><span>of 43 loaded</span></div>
+      <div class="buffer">
+        <div class="bufbar"><i class="done"></i><i class="rest"></i><i class="load"></i></div>
+        <div class="bufmeta">
+          <span>46 scanned &middot; 3 filtered out</span>
+          <em><span class="spin"></span>buffering 12</em>
+        </div>
+      </div>
+    </div>
+
+    <div class="spacer"></div>
+
+    <div class="dial">
+      <div class="ring">
+        <svg width="26" height="26">
+          <circle cx="13" cy="13" r="10.5" fill="none" stroke="rgba(53,211,193,.24)" stroke-width="2.6"/>
+          <circle cx="13" cy="13" r="10.5" fill="none" stroke="#35D3C1" stroke-width="2.6"
+                  stroke-linecap="round" stroke-dasharray="40.9 65.9"/>
+        </svg>
+      </div>
+      <div>
+        <div class="t1">3.1s</div>
+        <div class="t2">Auto &middot; 5s</div>
+      </div>
+    </div>
+
+    <button class="tbtn">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
+        <path d="M1 2.2h10M2.8 6h6.4M4.8 9.8h2.4"/>
+      </svg>
+      Filters <span class="badge">3</span>
+    </button>
+    <button class="tbtn"><span class="kbd">?</span>Keys</button>
+    <button class="tbtn icon" title="Deck settings">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3">
+        <circle cx="7" cy="7" r="2.3"/>
+        <path d="M7 .9v1.6M7 11.5v1.6M1.4 7h1.6M11 7h1.6M3.1 3.1l1.1 1.1M9.8 9.8l1.1 1.1M10.9 3.1L9.8 4.2M4.2 9.8l-1.1 1.1" stroke-linecap="round"/>
+      </svg>
+    </button>
+    <button class="tbtn icon" title="Pop out to window">
+      <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
+        <path d="M5 2H2v9h9V8M7.8 1.7h3.5v3.5M11.3 1.7L6.3 6.7"/>
+      </svg>
+    </button>
+    <button class="tbtn icon" title="Close (Esc)">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+        <path d="M2.4 2.4l7.2 7.2M9.6 2.4L2.4 9.6"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- ============ STAGE ============ -->
+  <div class="stagewrap">
+    <div class="grid"></div>
+
+    <div class="stage">
+      <div class="frame">
+        <img src="photo-landscape.svg" alt="">
+        <span class="corner c-tl"></span><span class="corner c-tr"></span>
+        <span class="corner c-bl"></span><span class="corner c-br"></span>
+      </div>
+    </div>
+
+    <div class="navzone l"><div class="chev">&#8249;</div></div>
+    <div class="navzone r"><div class="chev">&#8250;</div></div>
+
+    <div class="hud">
+      <div class="chipdark">1200 &times; 800 &nbsp;<b>72%</b></div>
+      <div class="chipdark fit">FIT&nbsp;<b>&#8964;</b></div>
+    </div>
+
+    <div class="toast">
+      <span class="tick">&#9733;</span>
+      <span>Saved to Reddit</span>
+      <span class="when">as u/example_user</span>
+    </div>
+
+    <div class="travel"><i></i></div>
+
+    <div class="callout" style="right:100px; top:272px;">hover &middot; next</div>
+    <div class="callout" style="right:16px; bottom:46px;">focus ring &#8595;</div>
+  </div>
+
+  <!-- ============ META STRIP ============ -->
+  <div class="meta">
+    <div class="typebadge">
+      <span class="g">
+        <svg width="17" height="17" viewBox="0 0 17 17" fill="none" stroke="currentColor" stroke-width="1.3">
+          <rect x="1.2" y="2.8" width="14.6" height="11.4" rx="1.6"/>
+          <circle cx="5.6" cy="6.8" r="1.3"/>
+          <path d="M1.2 11.6l4-3.4 3.4 2.9 2.6-2.2 4.6 3.9" stroke-linejoin="round"/>
+        </svg>
+      </span>
+      <span class="t">IMG</span>
+    </div>
+
+    <div class="mtext">
+      <div class="mtitle">Alpenglow over the north ridge, forty minutes before the storm rolled in</div>
+      <div class="mrow">
+        <span>r/EarthPorn</span><span class="dot"></span>
+        <span>u/example_user</span><span class="dot"></span>
+        <span class="sc">4.3k &#9650;</span><span class="plus">+1 yours</span><span class="dot"></span>
+        <span>318 comments</span><span class="dot"></span>
+        <span>6h ago</span><span class="dot"></span>
+        <a href="#">Open post &#8599;</a>
+      </div>
+    </div>
+
+    <div class="acts">
+      <button class="abtn up">&#9650;<span class="k">&#8593;</span></button>
+      <button class="abtn">&#9660;<span class="k">&#8595;</span></button>
+      <button class="abtn focusring">&#9733; Saved<span class="k">S</span></button>
+      <button class="abtn">&#8599; Post<span class="k">O</span></button>
+    </div>
+  </div>
+
+  <!-- ============ FILMSTRIP ============ -->
+  <div class="strip">
+    <div class="rowtiles">
+
+      <div class="tile seen">
+        <div class="thumb" style="background-image:url(photo-portrait.svg)">
+          <span class="tflag">IMG</span>
+        </div>
+        <div class="tcap"><b>14</b><span class="tick">&#10003;</span><span>Fog bank, valley floor</span></div>
+      </div>
+
+      <div class="tile seen">
+        <div class="thumb" style="background-image:url(photo-landscape.svg)">
+          <span class="tflag">VID</span><span class="play"><i>&#9654;</i></span><span class="tdur">0:22</span>
+        </div>
+        <div class="tcap"><b>15</b><span class="tick">&#10003;</span><span>Timelapse, ridge line</span></div>
+      </div>
+
+      <div class="tile seen">
+        <div class="thumb">
+          <div class="texttile">
+            <i style="width:88%"></i><i style="width:96%"></i><i style="width:71%"></i><i style="width:84%"></i>
+          </div>
+          <span class="tflag">TXT</span>
+        </div>
+        <div class="tcap"><b>16</b><span class="tick">&#10003;</span><span>Trip report: three days</span></div>
+      </div>
+
+      <div class="tile seen">
+        <div class="thumb">
+          <div class="nsfwblur" style="background-image:url(photo-portrait.svg)"></div>
+          <span class="nsfwtag"><i>18+</i></span>
+        </div>
+        <div class="tcap"><b>17</b><span>Hidden &middot; press R</span></div>
+      </div>
+
+      <div class="tile cur">
+        <div class="thumb" style="background-image:url(photo-landscape.svg)">
+          <span class="tflag">IMG</span>
+        </div>
+        <div class="tcap"><b>18</b><span>Alpenglow over the north&#8230;</span></div>
+      </div>
+
+      <div class="tile">
+        <div class="thumb" style="background-image:url(photo-portrait.svg)">
+          <span class="tflag">IMG</span>
+        </div>
+        <div class="tcap"><b>19</b><span>Sea stacks at low tide</span></div>
+      </div>
+
+      <div class="tile">
+        <div class="thumb">
+          <div class="linktile">
+            <svg width="16" height="16" viewBox="0 0 15 15" fill="none" stroke="#94A3B0" stroke-width="1.3" stroke-linecap="round">
+              <path d="M6.2 8.8a3 3 0 004.2 0l2.1-2.1a3 3 0 10-4.2-4.2L7.2 3.6"/>
+              <path d="M8.8 6.2a3 3 0 00-4.2 0L2.5 8.3a3 3 0 104.2 4.2l1.1-1.1"/>
+            </svg>
+            <b>nps.gov</b>
+          </div>
+          <span class="tflag">LINK</span>
+        </div>
+        <div class="tcap"><b>20</b><span>Permit lottery opens</span></div>
+      </div>
+
+      <div class="tile skel">
+        <div class="thumb"><span class="sh"></span><span class="sh sh2"></span></div>
+        <div class="tcap"><b>21</b><span>buffering&#8230;</span></div>
+      </div>
+
+      <div class="tile skel">
+        <div class="thumb"><span class="sh"></span><span class="sh sh2"></span></div>
+        <div class="tcap"><b>22</b><span>buffering&#8230;</span></div>
+      </div>
+
+    </div>
+
+    <div class="stripstatus">
+      <div class="ssrow"><span class="ssdot" style="background:var(--accent)"></span>Seen <b>17</b> of 43</div>
+      <div class="ssrow"><span class="ssdot" style="background:#3A5560"></span><b>+12</b> arriving from the tab</div>
+      <div class="ssrow"><span class="ssdot" style="background:var(--nsfw)"></span><b>3</b> hidden by filters</div>
+    </div>
+  </div>
+
+  <!-- ============ KEY LEGEND ============ -->
+  <div class="keyline">
+    <span class="kg"><kbd>&#8592;</kbd><kbd>&#8594;</kbd><em>step</em></span>
+    <span class="kg"><kbd>&#8679;&#8594;</kbd><em>jump 10</em></span>
+    <span class="kg"><kbd>Space</kbd><em>auto-advance</em></span>
+    <span class="kdiv"></span>
+    <span class="kg"><kbd>&#8593;</kbd><kbd>&#8595;</kbd><em>vote</em></span>
+    <span class="kg"><kbd>S</kbd><em>save</em></span>
+    <span class="kg"><kbd>O</kbd><em>open post</em></span>
+    <span class="kg"><kbd>R</kbd><em>reveal</em></span>
+    <span class="kdiv"></span>
+    <span class="kg"><kbd>T</kbd><em>strip</em></span>
+    <span class="kg"><kbd>F</kbd><em>filters</em></span>
+    <span class="kg"><kbd>Z</kbd><em>fit / fill</em></span>
+    <span class="kg"><kbd>?</kbd><em>all keys</em></span>
+    <span class="kg"><kbd>Esc</kbd><em>close</em></span>
+  </div>
+
+</div>
+</body>
+</html>

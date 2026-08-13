@@ -70,23 +70,20 @@ const BLOCK_AUDIBLE_AUTOPLAY = `
 
 // The renderers only need the container; the rest are the ids slideshow.js
 // looks up on load.
-const PAGE_HTML = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>renderer harness</title></head>
-<body style="margin:0">
-  <div id="top-bar"><span id="progress">0 / 0</span>
-    <button id="upvote-btn"></button>
-    <button id="downvote-btn"></button>
-    <button id="save-btn"></button>
-    <button id="auto-advance-btn"></button>
-    <button id="popout-btn"></button>
-    <button id="close-btn"></button>
-  </div>
-  <button id="prev-btn"></button>
-  <button id="next-btn"></button>
-  <div id="content-container" style="position:relative;width:640px;height:360px"></div>
-  <div id="post-info"><div id="post-title" style="padding:20px">title</div><div id="post-meta"></div></div>
-  <div id="progress-bar"><div id="progress-bar-fill"></div></div>
-</body></html>`;
+// Built from the real slideshow.html, not a copy of it: a hand-maintained
+// snapshot of the markup goes stale the moment the page changes, and shows up
+// as a TypeError inside an assertion about something else entirely.
+const { slideshowPage } = require("./slideshow-page");
+
+const PAGE_HTML = slideshowPage({
+  title: "renderer harness",
+  // No stylesheet here — these tests are about playback, not layout — so the
+  // stage needs a size of its own, and the title needs to be a click target.
+  extraStyle: `
+    #content-container { position: relative; width: 640px; height: 360px; }
+    #post-title { padding: 20px; }
+  `,
+});
 
 // Renders a post and settles before assertions, so nothing races the media
 // pipeline or the play() promise the muted fallback hangs off.
@@ -409,11 +406,14 @@ async function main() {
         );
         await new Promise((r) => setTimeout(r, 3000));
         const text = container.textContent;
+        // The class, not the copy: asserting on user-facing wording means the
+        // test breaks every time the message is improved.
+        const hasError = !!container.querySelector(".media-error");
         cleanup();
-        return { advances, text };
+        return { advances, text, hasError };
       });
 
-      assert(advanced.text.includes("Failed to load"), `Broken video reports the failure (got ${JSON.stringify(advanced.text)})`);
+      assert(advanced.hasError, `Broken video reports the failure (got ${JSON.stringify(advanced.text)})`);
       assert(advanced.advances === 1, `Auto-advance moves on from a broken video (advanced ${advanced.advances} times)`);
 
       // The queued advance belongs to a slide that no longer exists.

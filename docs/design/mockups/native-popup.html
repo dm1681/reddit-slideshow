@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Reddit Slideshow — Native · Popup</title>
+<style>
+  html, body { margin:0; padding:0; overflow:hidden; }
+  *, *::before, *::after { box-sizing:border-box; }
+
+  :root{
+    --rail:#0f1417;
+    --card:#171d21;
+    --card2:#1b2226;
+    --line:#242c31;
+    --line2:#333e45;
+    --text:#e9eef0;
+    --dim:#93a4ab;
+    --orange:#ff4a12;
+    --amber:#ffb524;
+    --green:#3fcf8e;
+    --font:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+
+  body{
+    width:360px; height:520px;
+    background:var(--rail); color:var(--text);
+    font-family:var(--font); -webkit-font-smoothing:antialiased;
+  }
+  .wrap{
+    width:360px; height:520px; padding:12px 16px;
+    display:flex; flex-direction:column;
+  }
+
+  /* header */
+  .hdr{ display:flex; align-items:center; gap:9px; height:28px; flex:0 0 28px; }
+  .mark{
+    width:24px; height:24px; border-radius:7px; flex:0 0 24px;
+    background:linear-gradient(150deg,#ff5c22,#d93a00);
+    display:grid; place-items:center;
+    box-shadow:0 2px 8px rgba(217,58,0,.35);
+  }
+  .wordmark{ font-size:13.5px; font-weight:700; letter-spacing:-.01em; color:#f0f4f5; }
+  .hdr .grow{ flex:1 1 auto; }
+  .ghost{
+    width:26px; height:26px; border-radius:7px; display:grid; place-items:center;
+    border:1px solid var(--line); background:var(--card); color:#93a4ab;
+  }
+
+  /* source card */
+  .source{
+    margin-top:12px; flex:0 0 auto;
+    background:var(--card); border:1px solid var(--line);
+    border-radius:12px; padding:12px;
+  }
+  .srow{ display:flex; align-items:center; gap:10px; }
+  .av{
+    width:34px; height:34px; flex:0 0 34px; border-radius:50%;
+    background:linear-gradient(140deg,#2f6d4f,#8bc38a 55%,#e8c98a);
+    display:grid; place-items:center; font-size:13px; font-weight:800; color:#0d1a13;
+    border:1px solid rgba(255,255,255,.14);
+  }
+  .sname{ font-size:15px; font-weight:700; color:#fff; letter-spacing:-.01em; }
+  .ssub{ font-size:11.5px; color:var(--dim); margin-top:2px; }
+  .ready{
+    margin-left:auto; display:inline-flex; align-items:center; gap:6px;
+    font-size:10.5px; font-weight:750; letter-spacing:.09em; text-transform:uppercase;
+    color:#7fe0b4; background:rgba(63,207,142,.12); border:1px solid rgba(63,207,142,.3);
+    border-radius:999px; padding:4px 9px;
+  }
+  .ready i{ width:5px; height:5px; border-radius:50%; background:var(--green); display:block; }
+
+  .count{
+    margin-top:11px; padding-top:11px; border-top:1px solid var(--line);
+    display:flex; align-items:center; gap:7px; flex-wrap:wrap;
+  }
+  .cnum{ font-size:13px; font-weight:750; color:#e6edef; font-variant-numeric:tabular-nums; }
+  .ctxt{ font-size:11.5px; color:var(--dim); }
+  .kinds{ display:flex; gap:5px; margin-top:9px; }
+  .kind{
+    display:inline-flex; align-items:center; gap:5px;
+    font-size:10.5px; font-weight:650; color:#a7bcc4;
+    background:#1e262b; border:1px solid #2a343a; border-radius:6px; padding:4px 7px;
+  }
+  .kind svg{ display:block; }
+
+  /* settings */
+  .seclabel{
+    margin:12px 0 7px; font-size:10.5px; font-weight:750;
+    letter-spacing:.13em; text-transform:uppercase; color:#7d8f97;
+  }
+  .settings{
+    background:var(--card); border:1px solid var(--line); border-radius:12px; overflow:hidden;
+  }
+  .set{
+    display:flex; align-items:center; gap:10px;
+    height:44px; padding:0 12px;
+    border-bottom:1px solid var(--line);
+  }
+  .set:last-child{ border-bottom:0; }
+  .set.hover{ background:#1c2429; }
+  .setlbl{ min-width:0; flex:1 1 auto; }
+  .setlbl .t{ font-size:12.5px; font-weight:650; color:#dde5e8; }
+  .setlbl .s{ font-size:10.5px; color:#7f9098; margin-top:2px; }
+
+  .stepper{
+    display:flex; align-items:center; border:1px solid var(--line2);
+    border-radius:7px; overflow:hidden; height:25px; opacity:.5;
+  }
+  .stepper button{
+    width:24px; height:23px; border:0; background:#1e262b; color:#b3c1c7;
+    font-size:13px; line-height:1; font-family:var(--font); cursor:pointer;
+  }
+  .stepper .val{
+    padding:0 8px; font-size:11.5px; font-weight:700; color:#e6edef;
+    line-height:23px; background:#161d21; font-variant-numeric:tabular-nums;
+  }
+
+  .sw{ width:38px; height:21px; border-radius:11px; position:relative; flex:0 0 38px;
+       background:#242d33; border:1px solid #333e45; }
+  .sw i{ position:absolute; top:2px; left:2px; width:15px; height:15px; border-radius:50%;
+       background:#7f9098; display:block; }
+  .sw.on{ background:var(--orange); border-color:#ff6a3a; }
+  .sw.on i{ left:auto; right:2px; background:#fff; }
+  .sw.amber{ background:var(--amber); border-color:#ffc95a; }
+  .sw.amber i{ left:auto; right:2px; background:#201604; }
+
+  .spacer{ flex:1 1 auto; min-height:6px; }
+
+  /* CTA */
+  .cta{
+    display:flex; align-items:center; justify-content:center; gap:9px;
+    width:100%; height:46px; border:0; border-radius:11px; cursor:pointer;
+    background:linear-gradient(180deg,#ff5c22,#e63f05);
+    color:#fff; font-family:var(--font); font-size:14.5px; font-weight:700;
+    letter-spacing:-.01em;
+    box-shadow:0 4px 14px rgba(230,63,5,.32), inset 0 1px 0 rgba(255,255,255,.18);
+  }
+  .ctahint{
+    margin-top:9px; text-align:center; font-size:11px; color:#7f9098; line-height:1.45;
+  }
+
+  /* footer legend */
+  .foot{
+    margin-top:10px; padding-top:9px; border-top:1px solid var(--line);
+  }
+  .keys{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .k{
+    display:inline-flex; align-items:center; justify-content:center;
+    min-width:20px; height:19px; padding:0 5px;
+    border:1px solid var(--line2); border-bottom-width:2px; border-radius:5px;
+    background:#1a2126; color:#c3d0d5; font-size:10px; font-weight:700;
+  }
+  .keys .lbl{ font-size:10.5px; color:#7f9098; margin-right:2px; }
+  .keys .sep{ width:1px; height:12px; background:#2b353b; margin:0 2px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="hdr">
+    <span class="mark">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+        <rect x="1.4" y="3" width="9.4" height="8" rx="2" stroke="#fff" stroke-width="1.5" opacity=".55"/>
+        <rect x="4.4" y="5.4" width="10.2" height="8.6" rx="2.2" fill="#fff"/>
+        <path d="M8.2 7.7 12 9.7l-3.8 2z" fill="#e63f05"/>
+      </svg>
+    </span>
+    <span class="wordmark">Reddit Slideshow</span>
+    <span class="grow"></span>
+    <span class="ghost">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">
+        <circle cx="8" cy="8" r="2.2"/>
+        <path d="M8 1.5v1.7M8 12.8v1.7M14.5 8h-1.7M3.2 8H1.5M12.6 3.4l-1.2 1.2M4.6 11.4l-1.2 1.2M12.6 12.6l-1.2-1.2M4.6 4.6 3.4 3.4" stroke-linecap="round"/>
+      </svg>
+    </span>
+  </div>
+
+  <!-- what will play -->
+  <div class="source">
+    <div class="srow">
+      <span class="av">E</span>
+      <div>
+        <div class="sname">r/EarthPorn</div>
+        <div class="ssub">Hot · the feed on this tab</div>
+      </div>
+      <span class="ready"><i></i>Ready</span>
+    </div>
+
+    <div class="count">
+      <span class="cnum">26 posts</span>
+      <span class="ctxt">loaded on the page now — more stream in as you watch</span>
+    </div>
+
+    <div class="kinds">
+      <span class="kind">
+        <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="#8fc7de" stroke-width="1.6">
+          <rect x="1.8" y="2.8" width="12.4" height="10.4" rx="2"/><circle cx="5.6" cy="6.4" r="1.1" fill="#8fc7de" stroke="none"/><path d="M2.4 11.2 6 7.9l2.6 2.2L11 8.4l3 2.8"/>
+        </svg>Images
+      </span>
+      <span class="kind">
+        <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="#e0b48f" stroke-width="1.6">
+          <rect x="1.8" y="3.2" width="12.4" height="9.6" rx="2"/><path d="M6.6 6.2 10.4 8l-3.8 1.8z" fill="#e0b48f" stroke="none"/>
+        </svg>Video
+      </span>
+      <span class="kind">
+        <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="#a8c9a0" stroke-width="1.6" stroke-linecap="round">
+          <path d="M3 4h10M3 8h10M3 12h6"/>
+        </svg>Text
+      </span>
+      <span class="kind">
+        <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="#c3a8de" stroke-width="1.6">
+          <rect x="4.4" y="2.4" width="9.4" height="9.4" rx="1.8"/><path d="M11 13.6H3.9a1.7 1.7 0 0 1-1.7-1.7V4.9"/>
+        </svg>Galleries
+      </span>
+    </div>
+  </div>
+
+  <div class="seclabel">Playback</div>
+
+  <div class="settings">
+    <div class="set">
+      <div class="setlbl">
+        <div class="t">Auto-advance</div>
+        <div class="s">Videos always play to the end</div>
+      </div>
+      <span class="stepper"><button>−</button><span class="val">8s</span><button>+</button></span>
+      <span class="sw"><i></i></span>
+    </div>
+
+    <div class="set hover">
+      <div class="setlbl">
+        <div class="t">Blur NSFW &amp; spoilers</div>
+        <div class="s">Click or press N to reveal</div>
+      </div>
+      <span class="sw amber"><i></i></span>
+    </div>
+
+    <div class="set">
+      <div class="setlbl">
+        <div class="t">Start videos muted</div>
+        <div class="s">Remembers your last choice</div>
+      </div>
+      <span class="sw on"><i></i></span>
+    </div>
+  </div>
+
+  <div class="spacer"></div>
+
+  <button class="cta">
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.4 13.2 8 4 13.6z"/></svg>
+    Play r/EarthPorn
+  </button>
+  <div class="ctahint">Opens over this tab — <strong style="color:#9fb0b7;font-weight:650;">Esc</strong> returns you here.</div>
+
+  <div class="foot">
+    <div class="keys">
+      <span class="lbl">Keys</span>
+      <span class="k">←</span><span class="k">→</span>
+      <span class="sep"></span>
+      <span class="k">Space</span>
+      <span class="sep"></span>
+      <span class="k">↑</span><span class="k">↓</span>
+      <span class="sep"></span>
+      <span class="k">S</span>
+      <span class="sep"></span>
+      <span class="k">?</span>
+      <span class="lbl" style="margin-left:2px">full list</span>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

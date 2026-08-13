@@ -1,5 +1,16 @@
 /* Reddit Slideshow — popup styles */
 
+:root {
+  --bg: #16161c;
+  --card: #1e1e26;
+  --line: #2c2c36;
+  --ink: #ededed;
+  --ink-2: #a3a3ad;
+  --ink-3: #74747e;
+  --accent: #4a9eff;
+  --bad: #ff6b6b;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -7,95 +18,199 @@
 }
 
 body {
-  width: 300px;
-  background: #1a1a2e;
-  color: #e0e0e0;
+  width: 320px;
+  background: var(--bg);
+  color: var(--ink);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 14px;
+  font-variant-numeric: tabular-nums;
 }
 
 #app {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   padding: 16px;
 }
 
 h1 {
-  font-size: 16px;
+  font-size: 13px;
   font-weight: 600;
-  margin-bottom: 12px;
-  color: #fff;
+  letter-spacing: 0.02em;
+  color: var(--ink);
 }
 
-label {
-  display: block;
-  font-size: 12px;
-  color: #888;
-  margin-bottom: 4px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+/* --- Preflight card --- */
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 11px 13px;
 }
 
-input, select {
-  width: 100%;
-  padding: 8px 10px;
-  background: #0a0a1a;
-  border: 1px solid #333;
-  border-radius: 4px;
-  color: #e0e0e0;
-  font-size: 14px;
-  margin-bottom: 12px;
-  outline: none;
-}
-
-input:focus, select:focus {
-  border-color: #4a9eff;
-}
-
-select {
-  cursor: pointer;
-}
-
-button {
-  width: 100%;
-  padding: 10px;
-  background: #4a9eff;
-  border: none;
-  border-radius: 4px;
-  color: #fff;
-  font-size: 14px;
+#source {
+  font-size: 13px;
   font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s;
+  color: var(--ink);
 }
 
-button:hover {
-  background: #3a8eef;
+#count {
+  margin-top: 3px;
+  font-size: 12.5px;
+  color: var(--ink-2);
 }
 
-button:active {
-  background: #2a7edf;
+#breakdown {
+  margin-top: 7px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
 }
 
-.detected {
-  background: rgba(74, 158, 255, 0.1);
-  border: 1px solid rgba(74, 158, 255, 0.3);
-  border-radius: 4px;
-  padding: 6px 10px;
-  margin-bottom: 12px;
-  font-size: 12px;
-  color: #4a9eff;
+#breakdown:empty {
+  display: none;
+}
+
+#breakdown span {
+  font-size: 11px;
+  color: var(--ink-2);
+  background: rgba(255, 255, 255, 0.07);
+  border-radius: 100px;
+  padding: 2px 8px;
 }
 
 .error {
-  color: #ff6b6b;
-  font-size: 12px;
-  margin-top: -8px;
-  margin-bottom: 8px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--bad);
 }
 
-button.stop {
-  background: #cc4444;
+.error[hidden] {
+  display: none;
 }
 
-button.stop:hover {
-  background: #bb3333;
+/* --- Primary action --- */
+
+button.primary {
+  width: 100%;
+  padding: 11px;
+  background: var(--accent);
+  border: none;
+  border-radius: 7px;
+  color: #06121f;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+button.primary:hover:not(:disabled) {
+  background: #66adff;
+}
+
+button.primary:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+button.primary.stop {
+  background: #d0453f;
+  color: #fff;
+}
+
+button.primary.stop:hover:not(:disabled) {
+  background: #e05a54;
+}
+
+/* --- Setting row --- */
+
+.setting {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+  margin-top: 2px;
+}
+
+.setting-label {
+  padding-top: 6px;
+}
+
+.setting-label span {
+  display: block;
+  font-size: 12.5px;
+  color: var(--ink);
+}
+
+.setting-label small {
+  display: block;
+  margin-top: 2px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--ink-2);
+}
+
+/* A real button with role=switch: focusable, announced, and operable by
+   keyboard — which a styled <span> is not. */
+.switch {
+  flex: 0 0 auto;
+  width: 42px;
+  height: 24px;
+  margin-top: 6px;
+  padding: 3px;
+  border-radius: 100px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.switch .knob {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--ink-3);
+  transition: transform 0.15s, background 0.15s;
+}
+
+.switch[aria-checked="true"] {
+  background: rgba(74, 158, 255, 0.28);
+  border-color: rgba(74, 158, 255, 0.5);
+}
+
+.switch[aria-checked="true"] .knob {
+  transform: translateX(18px);
+  background: var(--accent);
+}
+
+.footnote {
+  font-size: 11.5px;
+  color: var(--ink-3);
+  line-height: 1.5;
+}
+
+kbd {
+  font: inherit;
+  font-size: 10.5px;
+  color: var(--ink-2);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition-duration: 0.01ms !important;
+  }
 }

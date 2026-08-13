@@ -48,10 +48,34 @@ versions stay in step.
 ## Architecture
 
 - `manifest.json` — Extension manifest defining permissions, content scripts, popup, and background scripts
-- `popup/` — Browser action popup UI (entry point for starting a slideshow)
+- `popup/` — Browser action popup. Runs a read-only `scanOnly` preflight so it
+  can say what is on the page before starting anything.
 - `slideshow/` — Fullscreen slideshow page that displays Reddit posts sequentially
+  - `slideshow.js` — the controller: navigation, auto-advance, vote/save, the gate
+  - `settings.js` — playback preferences, persisted to `localStorage`
+  - `reel.js` — the `?` panel: keyboard legend and playback settings
+  - `renderers/` — one per media type; each returns a cleanup that must silence
+    everything it scheduled (see `test/test-auto-advance.js`)
 - `background/` — Background script handling Reddit API calls and state management
 - `content/` — Content scripts injected into Reddit pages (if needed for context-aware launching)
+
+### Settings storage
+
+Use `localStorage` on the extension origin, **not** `browser.storage`. The
+manifest has no `storage` permission and adding one is a permission change on a
+listed AMO add-on — a review plus a prompt for every existing user. The popup
+and the slideshow share `moz-extension://<id>`, so they see the same values, and
+`settings.js` listens for the `storage` event to pick up a change made by the
+other document.
+
+### Adult and spoiler posts
+
+Gated by withholding `mediaUrl` from the renderer, never by CSS blur — a blur
+means the file has already been downloaded and decoded. `nsfw`/`spoiler` are
+read from both the `shreddit-post` attributes and `/api/info.json` and OR'd
+together: the info.json fetch swallows its own failures, so trusting it alone
+would fail open exactly when it matters. Never let a new code path clear these
+flags; only ever add them.
 
 ### Data Flow
 1. User triggers slideshow from popup or content script

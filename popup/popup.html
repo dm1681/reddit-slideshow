@@ -8,14 +8,32 @@
   <div id="app">
     <h1>Reddit Slideshow</h1>
 
-    <div id="detected" class="detected" style="display:none;">
-      <span id="detected-label"></span>
+    <!-- What is actually on the page, read before the viewer commits. A
+         zero-post scrape used to report success, close the popup, and drop
+         the user onto a black fullscreen. -->
+    <div id="preflight" class="card" hidden>
+      <div id="source"></div>
+      <div id="count"></div>
+      <div id="breakdown"></div>
     </div>
 
-    <div id="error-msg" class="error" style="display:none;"></div>
+    <div id="error-msg" class="error" hidden></div>
 
-    <button id="start-btn">Start Slideshow</button>
+    <button id="start-btn" class="primary" type="button">Start Slideshow</button>
+
+    <div class="setting">
+      <div class="setting-label">
+        <span>Hide adult &amp; spoiler posts</span>
+        <small>Their media is not downloaded until you press R</small>
+      </div>
+      <button id="mask-toggle" class="switch" type="button" role="switch" aria-checked="true">
+        <span class="knob" aria-hidden="true"></span>
+      </button>
+    </div>
+
+    <p class="footnote">Press <kbd>?</kbd> in the slideshow for keys and settings.</p>
   </div>
+  <script src="../slideshow/settings.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

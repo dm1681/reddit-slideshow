@@ -2,6 +2,9 @@
 
 let overlayElement = null;
 let savedOverflow = null;
+// Elements this overlay made inert, so they can be handed back exactly as
+// found — anything the page had already marked inert is left alone.
+let inertedSiblings = [];
 
 // --- DOM scraping ---
 
@@ -71,6 +74,12 @@ function classifyUrl(url) {
   if (embedUrl) {
     // Special case: imgur mp4 is a direct video
     if (embedUrl.endsWith(".mp4")) {
+      // A .gifv is a gif imgur re-encoded as mp4 — silent, looping, and
+      // nobody's idea of a video. A bare .mp4 is left alone, since that one
+      // could genuinely carry audio.
+      if (/\.gifv(\?|$)/i.test(url)) {
+        return { type: "video", mediaUrl: embedUrl, isGif: true, hasAudio: false };
+      }
       return { type: "video", mediaUrl: embedUrl };
     }
     return { type: "embed", mediaUrl: embedUrl, originalUrl: url };
@@ -152,6 +161,13 @@ function classifyPost(el) {
   return null;
 }
 
+// shreddit-post writes these as bare attributes (`nsfw=""`) as often as
+// `nsfw="true"`, so presence is what counts.
+function boolAttr(el, name) {
+  const value = el.getAttribute(name);
+  return value !== null && value !== "false" && value !== "0";
+}
+
 function scrapePosts() {
   const posts = [];
   const seen = new Set();
@@ -190,8 +206,18 @@ function scrapePosts() {
       subreddit: (el.getAttribute("subreddit-prefixed-name") || "").replace(/^r\//, ""),
       score: parseInt(el.getAttribute("score") || "0", 10),
       permalink: el.getAttribute("permalink") || "",
+      // Read here as well as from info.json, deliberately. The info.json fetch
+      // swallows its own failures and continues with an empty map, so relying
+      // on it alone would mean adult media renders unblurred at full screen in
+      // exactly the case the gate exists for. Either source saying "adult" is
+      // enough; both being silent must not be read as "safe".
+      nsfw: boolAttr(el, "nsfw"),
+      spoiler: boolAttr(el, "spoiler"),
       type: classified.type,
       mediaUrl: classified.mediaUrl,
+      // Only named fields are copied off `classified`, so anything new the
+      // classifier learns has to be listed here to survive.
+      ...(classified.isGif ? { isGif: true, hasAudio: false } : {}),
       originalUrl: classified.originalUrl || el.getAttribute("content-href") || "",
       // Carried only until resolvePendingPosts fills in the real media from
       // the post's JSON, and stripped there.
@@ -217,12 +243,14 @@ function scrapePosts() {
       const dataUrl = el.getAttribute("data-url") || "";
       let type = "image";
       let mediaUrl = null;
+      let isGif = false;
 
       if (/\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i.test(dataUrl)) {
         mediaUrl = dataUrl;
       } else if (/\.(mp4|gifv)(\?.*)?$/i.test(dataUrl)) {
         type = "video";
         mediaUrl = dataUrl.replace(/\.gifv$/i, ".mp4");
+        isGif = /\.gifv(\?|$)/i.test(dataUrl);
       } else {
         const embedUrl = getEmbedUrl(dataUrl);
         if (embedUrl) {
@@ -249,8 +277,11 @@ function scrapePosts() {
           subreddit: el.getAttribute("data-subreddit") || "",
           score: parseInt(el.getAttribute("data-score") || "0", 10),
           permalink: (el.querySelector("a.comments") || {}).getAttribute("href") || "",
+          nsfw: el.classList.contains("over18") || el.getAttribute("data-nsfw") === "true",
+          spoiler: el.classList.contains("spoiler"),
           type,
           mediaUrl,
+          ...(isGif ? { isGif: true, hasAudio: false } : {}),
           originalUrl: dataUrl,
         });
       }
@@ -287,6 +318,14 @@ async function fetchPostJson(href) {
 
 // gallery_data holds the order, media_metadata the URLs. `s` is the source
 // rendition: `u` for stills, `gif`/`mp4` for animated ones.
+// Returns { url, animated } per item rather than a bare URL. `e` is Reddit's
+// own declaration of what the item is ("Image" / "AnimatedImage"), which beats
+// sniffing the file extension — and downstream it is the difference between a
+// gallery of gifs playing as gifs and playing as a row of silent video files
+// with scrub bars.
+//
+// mp4 is preferred over gif for animated items: same frames, a fraction of the
+// bytes, and hardware decoded.
 function galleryMediaUrls(data) {
   const items = data && data.gallery_data && data.gallery_data.items;
   const meta = data && data.media_metadata;
@@ -296,24 +335,52 @@ function galleryMediaUrls(data) {
     .map((item) => {
       const entry = meta[item.media_id];
       const source = entry && entry.s;
-      return source ? source.u || source.mp4 || source.gif || null : null;
+      if (!source) return null;
+      const animated = entry.e === "AnimatedImage" || !!(source.mp4 || source.gif);
+      const url = animated
+        ? source.mp4 || source.gif || source.u
+        : source.u || source.mp4 || source.gif;
+      return url ? { url, animated } : null;
     })
     .filter(Boolean);
 }
 
+// A post's own JSON is the authority on whether it is adult or spoilered —
+// used for crossposts and galleries, where the DOM we scraped belongs to the
+// wrapper rather than to the media finally shown. Flags are only ever added,
+// never cleared: whichever source says "adult" wins.
+function withJsonFlags(post, data) {
+  return {
+    ...post,
+    nsfw: post.nsfw === true || (data && data.over_18 === true),
+    spoiler: post.spoiler === true || (data && data.spoiler === true),
+  };
+}
+
 // One post per image: a slideshow shows one thing at a time, so a gallery that
 // stayed a single post would show only its first image.
-function expandGallery(post, urls) {
+function expandGallery(post, items) {
   const { crosspostHref, galleryHref, ...rest } = post;
-  const multiple = urls.length > 1;
+  const multiple = items.length > 1;
 
-  return urls.map((url, i) => ({
-    ...rest,
-    id: multiple ? `${post.id}-${i + 1}` : post.id,
-    title: multiple ? `${post.title} (${i + 1}/${urls.length})` : post.title,
-    type: /\.mp4(\?|$)/i.test(url) ? "video" : "image",
-    mediaUrl: url,
-  }));
+  return items.map((item, i) => {
+    // An animated item delivered as mp4 is a gif, not a video: silent by
+    // construction, meant to loop, and no use for a scrub bar. A Reddit
+    // gallery cannot contain audio at all, so this is safe to assert rather
+    // than guess — and asserting it is what stops the player prompting
+    // "click for sound" on a clip that has none.
+    const asMp4 = /\.mp4(\?|$)/i.test(item.url);
+    const isGif = item.animated && asMp4;
+
+    return {
+      ...rest,
+      id: multiple ? `${post.id}-${i + 1}` : post.id,
+      title: multiple ? `${post.title} (${i + 1}/${items.length})` : post.title,
+      type: asMp4 ? "video" : "image",
+      mediaUrl: item.url,
+      ...(isGif ? { isGif: true, hasAudio: false } : {}),
+    };
+  });
 }
 
 async function resolveCrosspost(post) {
@@ -321,14 +388,17 @@ async function resolveCrosspost(post) {
     const original = await fetchPostJson(post.crosspostHref);
     if (!original) return null;
 
+    // The crosspost wrapper can be tame while the post it points at is not.
+    const flagged = withJsonFlags(post, original);
+
     // The original may itself be a gallery.
     const gallery = galleryMediaUrls(original);
-    if (gallery.length) return expandGallery(post, gallery);
+    if (gallery.length) return expandGallery(flagged, gallery);
 
     const classified = classifyUrl(original.url || "");
     if (!classified) return null;
 
-    const { crosspostHref, ...rest } = post;
+    const { crosspostHref, ...rest } = flagged;
     return { ...rest, ...classified };
   } catch (e) {
     // Unreachable or not JSON — the post is dropped rather than shown broken
@@ -344,7 +414,7 @@ async function resolveGallery(post) {
     const urls = galleryMediaUrls(data);
     if (!urls.length) return null;
 
-    return expandGallery(post, urls);
+    return expandGallery(withJsonFlags(post, data), urls);
   } catch (e) {
     return null;
   }
@@ -426,10 +496,44 @@ function handleVotePost(message) {
   return redditAction("/api/vote", { id: message.id, dir: String(message.dir) });
 }
 
-// Whether the viewer has already saved or voted on these posts. One request
+// What Reddit knows about these posts that the DOM does not say. One request
 // covers a whole batch — /api/info.json takes up to 100 ids — so the slideshow
 // can show the real state instead of guessing.
+//
+// This response was already being fetched and all but two fields thrown away.
+// The rest cost nothing extra: no additional request, no additional
+// permission. They are what lets the slideshow gate adult content, show
+// comment counts and flair, and — later — render text posts at all.
 const INFO_BATCH_SIZE = 100;
+
+// preview.redd.it URLs are signed and expire, so a thumbnail picked up at the
+// start of a long session can be dead by the time a filmstrip asks for it.
+// The smallest rendition is picked because that is all a thumbnail needs.
+function previewThumbnail(d) {
+  const images = d && d.preview && d.preview.images;
+  const first = Array.isArray(images) && images[0];
+  const resolutions = first && first.resolutions;
+  if (Array.isArray(resolutions) && resolutions.length) {
+    const smallest = resolutions.reduce((a, b) => ((a.width || 0) <= (b.width || 0) ? a : b));
+    if (smallest && smallest.url) return smallest.url;
+  }
+  // `thumbnail` is sometimes a placeholder word rather than a URL.
+  return /^https?:/.test(d.thumbnail || "") ? d.thumbnail : "";
+}
+
+function infoFields(d) {
+  return {
+    saved: d.saved === true,
+    likes: d.likes === undefined ? null : d.likes,
+    nsfw: d.over_18 === true,
+    spoiler: d.spoiler === true,
+    selftext: typeof d.selftext === "string" ? d.selftext : "",
+    numComments: typeof d.num_comments === "number" ? d.num_comments : null,
+    createdUtc: typeof d.created_utc === "number" ? d.created_utc : null,
+    flair: d.link_flair_text || "",
+    thumbnail: previewThumbnail(d),
+  };
+}
 
 async function attachUserState(posts) {
   const ids = [...new Set(posts.map((p) => p.redditId).filter((id) => /^t3_\w+$/.test(id)))];
@@ -448,7 +552,7 @@ async function attachUserState(posts) {
       const children = (data && data.data && data.data.children) || [];
       children.forEach((child) => {
         const d = child.data || {};
-        state.set(d.name, { saved: d.saved === true, likes: d.likes === undefined ? null : d.likes });
+        state.set(d.name, infoFields(d));
       });
     } catch (e) {
       // Not signed in, or Reddit is unhappy — the buttons still work, they
@@ -458,7 +562,11 @@ async function attachUserState(posts) {
 
   return posts.map((post) => {
     const found = state.get(post.redditId);
-    return found ? { ...post, ...found } : post;
+    // This fetch fails silently on a signed-out or rate-limited viewer, so a
+    // post that got no answer keeps whatever the DOM scrape already said about
+    // it — in particular its nsfw/spoiler flags, which must not be downgraded
+    // to "safe" just because the request died.
+    return found ? { ...post, ...found, nsfw: post.nsfw || found.nsfw, spoiler: post.spoiler || found.spoiler } : post;
   });
 }
 
@@ -521,13 +629,34 @@ function createOverlay() {
     margin: 0;
     padding: 0;
   `;
-  iframe.allow = "autoplay";
+  // Fullscreen is a delegated permission: a frame can only enter fullscreen if
+  // every ancestor grants it. Without this the slideshow cannot go fullscreen
+  // at all in overlay mode — and neither can anything inside it, so an
+  // embedded player's own fullscreen button silently does nothing even though
+  // embed.js asks for the permission it never receives.
+  iframe.allow = "autoplay; fullscreen";
+  iframe.setAttribute("allowfullscreen", "");
 
   overlayElement.appendChild(iframe);
   document.body.appendChild(overlayElement);
 
   savedOverflow = document.body.style.overflow;
   document.body.style.overflow = "hidden";
+
+  // The page behind is covered but still in the tab order, so Tab used to walk
+  // straight out of the slideshow into Reddit's own links. inert takes the
+  // whole subtree out of focus, hit-testing and the accessibility tree at once.
+  inertedSiblings = [...document.body.children].filter(
+    (el) => el !== overlayElement && !el.inert
+  );
+  inertedSiblings.forEach((el) => {
+    el.inert = true;
+  });
+
+  // Nothing focused the iframe, so keyboard navigation was dead until the
+  // viewer clicked inside it and every keypress before that went to Reddit.
+  iframe.addEventListener("load", () => iframe.focus(), { once: true });
+  iframe.focus();
 }
 
 function removeOverlay() {
@@ -536,12 +665,18 @@ function removeOverlay() {
   overlayElement.remove();
   overlayElement = null;
   document.body.style.overflow = savedOverflow;
+  inertedSiblings.forEach((el) => {
+    el.inert = false;
+  });
+  inertedSiblings = [];
 }
 
 // --- Message handling ---
 
 browser.runtime.onMessage.addListener((message) => {
   switch (message.type) {
+    case "scanOnly":
+      return handleScanOnly();
     case "scrapeAndStart":
       return handleScrapeAndStart();
     case "loadMore":
@@ -558,6 +693,32 @@ browser.runtime.onMessage.addListener((message) => {
   }
 });
 
+// What the popup can promise before anything is started. scrapePosts() is a
+// synchronous DOM read with no fetches, so this is cheap enough to run every
+// time the popup opens — and a Firefox popup is destroyed the moment it loses
+// focus, so anything expensive started here would be thrown away anyway.
+//
+// The count is approximate and labelled as such: resolvePendingPosts later
+// expands one gallery into N posts and drops crossposts it cannot resolve.
+// A precise-looking figure the pipeline then contradicts would be worse than
+// no figure at all.
+function handleScanOnly() {
+  const posts = scrapePosts();
+  const subreddit = (location.pathname.match(/^\/r\/([a-zA-Z0-9_]+)/) || [])[1] || "";
+  const counts = posts.reduce((acc, post) => {
+    acc[post.type] = (acc[post.type] || 0) + 1;
+    return acc;
+  }, {});
+  return Promise.resolve({
+    count: posts.length,
+    counts,
+    subreddit,
+    // The scrape only sees what the page has rendered, so an untouched feed
+    // holds a couple of screens' worth however far the subreddit goes.
+    approximate: true,
+  });
+}
+
 async function handleScrapeAndStart() {
   const posts = await attachUserState(await resolvePendingPosts(scrapePosts()));
   createOverlay();
@@ -569,10 +730,18 @@ async function handleLoadMore() {
   return { posts };
 }
 
-// Listen for Escape key to close overlay
+// Escape closes the overlay — but only when the Reddit page itself has focus.
+//
+// The slideshow iframe has its own Escape handler and its own idea of what
+// closing means. Both used to fire: the iframe asked the background to close
+// the session while this listener tore the overlay down underneath it. Worse,
+// before anything inside the iframe had been focused, every keypress landed
+// here, so the viewer's first Escape killed the session with no warning
+// whatever they thought they were dismissing.
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && overlayElement) {
-    browser.runtime.sendMessage({ type: "closeSlideshow" });
-    removeOverlay();
-  }
+  if (e.key !== "Escape" || !overlayElement) return;
+  // activeElement is the <iframe> whenever focus is anywhere inside it.
+  if (document.activeElement === overlayElement.querySelector("iframe")) return;
+  browser.runtime.sendMessage({ type: "closeSlideshow" });
+  removeOverlay();
 });

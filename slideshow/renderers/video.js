@@ -59,6 +59,18 @@ function saveAudioPref() {
 // reports both the same way. One retry separates them cheaply.
 const VIDEO_RETRY_DELAY_MS = 600;
 
+// A gif delivered as mp4 is a still that moves, not a video: it gets the same
+// dwell a still gets, and is never cut off part-way through a loop. Advancing
+// on `ended` is what made a gallery of gifs flick past — an eight-item gallery
+// of 1.2s clips was gone in ten seconds while a single photo sat for five.
+const GIF_FALLBACK_DWELL_MS = 5000;
+
+function gifDwellMs() {
+  if (typeof SlideshowSettings === "undefined") return GIF_FALLBACK_DWELL_MS;
+  const value = SlideshowSettings.get("imageDwellMs");
+  return typeof value === "number" ? value : GIF_FALLBACK_DWELL_MS;
+}
+
 const VideoRenderer = {
   // onFail, when given, is the caller's escape hatch: the file could not be
   // played even after a retry, and the post is better shown some other way
@@ -70,9 +82,14 @@ const VideoRenderer = {
     spinner.className = "loading-spinner";
     container.appendChild(spinner);
 
+    // Gifs re-encoded as mp4 — gallery items, imgur .gifv. Silent by
+    // construction, so a scrub bar is furniture and looping is the point.
+    const isGif = post.isGif === true;
+
     const video = document.createElement("video");
-    video.controls = true;
-    video.loop = !onEnded; // Only loop if auto-advance is off
+    video.controls = !isGif;
+    // A gif always loops; a real video only when nothing is waiting on it to end.
+    video.loop = isGif || !onEnded;
     video.muted = audioPref.muted;
     video.volume = audioPref.volume;
     video.playsInline = true;
@@ -91,6 +108,8 @@ const VideoRenderer = {
     let gestureHandler = null;
     let errorTimer = null;
     let retryTimer = null;
+    let gifTimer = null;
+    let failureCard = null;
     let retried = false;
 
     function clearSoundHint() {
@@ -190,11 +209,26 @@ const VideoRenderer = {
       // moved to.
       if (cancelled) return;
       spinner.remove();
-      const errDiv = document.createElement("div");
-      errDiv.style.cssText = "color:#777;font-size:14px;";
-      errDiv.textContent = "Failed to load video";
-      container.innerHTML = "";
-      container.appendChild(errDiv);
+
+      // video.error carries a code Firefox worked out itself — unsupported
+      // codec, decode failure, interrupted download — which is better than
+      // anything that can be inferred from the URL.
+      const code = video.error ? video.error.code : null;
+      if (typeof MediaFailure === "undefined") {
+        const errDiv = document.createElement("div");
+        errDiv.className = "media-error slide-message";
+        errDiv.textContent = "Could not load this video";
+        container.textContent = "";
+        container.appendChild(errDiv);
+      } else {
+        failureCard = MediaFailure.show(container, {
+          post,
+          url: post.mediaUrl,
+          kind: "video",
+          code,
+          willAdvance: !!onEnded,
+        });
+      }
 
       // A video that never loads never fires `ended`, so auto-advance would
       // stop here for good. Same 2s grace the image renderer gives an error.
@@ -207,11 +241,25 @@ const VideoRenderer = {
       // Played explicitly instead of via the autoplay attribute, so a blocked
       // start surfaces as a rejected promise we can fall back from.
       attemptPlay();
+      // A looping gif never fires `ended`, so its advance is timed from here —
+      // once the duration is known, and only once.
+      armGifAdvance();
     });
 
     video.addEventListener("error", handleMediaError);
 
-    if (onEnded) {
+    // A gif gets the still dwell, but never less than one full loop: the
+    // shortest clip still reads, and a long one is not cut in half.
+    function armGifAdvance() {
+      if (!isGif || !onEnded || cancelled || gifTimer) return;
+      const durationMs =
+        Number.isFinite(video.duration) && video.duration > 0 ? video.duration * 1000 : 0;
+      gifTimer = setTimeout(() => {
+        if (!cancelled) onEnded();
+      }, Math.max(gifDwellMs(), durationMs));
+    }
+
+    if (onEnded && !isGif) {
       // Guarded like every other advance here: nothing from a torn-down
       // renderer may move the slideshow off the slide that replaced it.
       video.addEventListener("ended", () => {
@@ -246,6 +294,8 @@ const VideoRenderer = {
       // skip whatever replaced it.
       if (errorTimer) clearTimeout(errorTimer);
       if (retryTimer) clearTimeout(retryTimer);
+      if (gifTimer) clearTimeout(gifTimer);
+      if (failureCard) failureCard.cancel();
       clearSoundHint();
       video.pause();
       video.src = "";
