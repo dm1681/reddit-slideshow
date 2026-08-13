@@ -182,6 +182,9 @@ function scrapePosts() {
 
     posts.push({
       id,
+      // The slideshow's id can drift from Reddit's — a gallery becomes one
+      // post per image — so the thing Reddit knows it by is kept separately.
+      redditId: id,
       title: el.getAttribute("post-title") || "",
       author: el.getAttribute("author") || "",
       subreddit: (el.getAttribute("subreddit-prefixed-name") || "").replace(/^r\//, ""),
@@ -240,6 +243,7 @@ function scrapePosts() {
       if (mediaUrl) {
         posts.push({
           id,
+          redditId: id,
           title: (el.querySelector("a.title") || {}).textContent || "",
           author: el.getAttribute("data-author") || "",
           subreddit: el.getAttribute("data-subreddit") || "",
@@ -364,6 +368,100 @@ async function resolvePendingPosts(posts) {
   return kept;
 }
 
+// --- Reddit actions (save, vote) ---
+
+// Done from the content script because this is the only place that has the
+// viewer's session: the requests are same-origin and carry their cookies. The
+// legacy endpoints want a modhash, which /api/me.json hands out for the price
+// of one request per page.
+let modhashPromise = null;
+
+function getModhash() {
+  if (!modhashPromise) {
+    modhashPromise = fetch(`${location.origin}/api/me.json`, {
+      credentials: "include",
+      signal: AbortSignal.timeout(JSON_TIMEOUT_MS),
+    })
+      .then((resp) => (resp.ok ? resp.json() : null))
+      .then((data) => (data && data.data && data.data.modhash) || null)
+      .catch(() => null);
+  }
+  return modhashPromise;
+}
+
+async function redditAction(path, params) {
+  try {
+    const modhash = await getModhash();
+    if (!modhash) return { error: "Not signed in to Reddit" };
+
+    const resp = await fetch(`${location.origin}${path}`, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "X-Modhash": modhash,
+      },
+      body: new URLSearchParams(params).toString(),
+      signal: AbortSignal.timeout(JSON_TIMEOUT_MS),
+    });
+
+    if (!resp.ok) {
+      // A stale modhash is worth one more try with a fresh one.
+      modhashPromise = null;
+      return { error: `Reddit returned ${resp.status}` };
+    }
+    return { success: true };
+  } catch (e) {
+    return { error: "Could not reach Reddit" };
+  }
+}
+
+function handleSavePost(message) {
+  if (!message.id) return Promise.resolve({ error: "No post id" });
+  return redditAction(message.saved ? "/api/save" : "/api/unsave", { id: message.id });
+}
+
+function handleVotePost(message) {
+  if (!message.id) return Promise.resolve({ error: "No post id" });
+  return redditAction("/api/vote", { id: message.id, dir: String(message.dir) });
+}
+
+// Whether the viewer has already saved or voted on these posts. One request
+// covers a whole batch — /api/info.json takes up to 100 ids — so the slideshow
+// can show the real state instead of guessing.
+const INFO_BATCH_SIZE = 100;
+
+async function attachUserState(posts) {
+  const ids = [...new Set(posts.map((p) => p.redditId).filter((id) => /^t3_\w+$/.test(id)))];
+  if (!ids.length) return posts;
+
+  const state = new Map();
+  for (let i = 0; i < ids.length; i += INFO_BATCH_SIZE) {
+    const batch = ids.slice(i, i + INFO_BATCH_SIZE);
+    try {
+      const resp = await fetch(
+        `${location.origin}/api/info.json?id=${batch.join(",")}&raw_json=1`,
+        { credentials: "include", signal: AbortSignal.timeout(JSON_TIMEOUT_MS) }
+      );
+      if (!resp.ok) continue;
+      const data = await resp.json();
+      const children = (data && data.data && data.data.children) || [];
+      children.forEach((child) => {
+        const d = child.data || {};
+        state.set(d.name, { saved: d.saved === true, likes: d.likes === undefined ? null : d.likes });
+      });
+    } catch (e) {
+      // Not signed in, or Reddit is unhappy — the buttons still work, they
+      // just start from an unknown state.
+    }
+  }
+
+  return posts.map((post) => {
+    const found = state.get(post.redditId);
+    return found ? { ...post, ...found } : post;
+  });
+}
+
 // --- Scroll to load more ---
 
 async function scrollAndScrape() {
@@ -448,6 +546,10 @@ browser.runtime.onMessage.addListener((message) => {
       return handleScrapeAndStart();
     case "loadMore":
       return handleLoadMore();
+    case "savePost":
+      return handleSavePost(message);
+    case "votePost":
+      return handleVotePost(message);
     case "hideOverlay":
       removeOverlay();
       return Promise.resolve({ success: true });
@@ -457,13 +559,13 @@ browser.runtime.onMessage.addListener((message) => {
 });
 
 async function handleScrapeAndStart() {
-  const posts = await resolvePendingPosts(scrapePosts());
+  const posts = await attachUserState(await resolvePendingPosts(scrapePosts()));
   createOverlay();
   return { success: true, posts };
 }
 
 async function handleLoadMore() {
-  const posts = await resolvePendingPosts(await scrollAndScrape());
+  const posts = await attachUserState(await resolvePendingPosts(await scrollAndScrape()));
   return { posts };
 }
 

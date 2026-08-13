@@ -16,6 +16,9 @@
   const closeBtn = document.getElementById("close-btn");
   const popoutBtn = document.getElementById("popout-btn");
   const autoAdvanceBtn = document.getElementById("auto-advance-btn");
+  const saveBtn = document.getElementById("save-btn");
+  const upvoteBtn = document.getElementById("upvote-btn");
+  const downvoteBtn = document.getElementById("downvote-btn");
 
   // --- State ---
   let posts = [];
@@ -116,6 +119,7 @@
     } else {
       updateProgress();
       updateNavButtons();
+      updateActionButtons();
     }
   }
 
@@ -175,6 +179,7 @@
     updatePostInfo(post);
     updateProgress();
     updateNavButtons();
+    updateActionButtons();
 
     // Preload next image
     preloadNext();
@@ -197,6 +202,84 @@
       contentContainer,
       onEnded
     );
+  }
+
+  // --- Reddit actions ---
+  // The buttons show what Reddit says, then move as soon as they are pressed
+  // and roll back if Reddit refuses — waiting on a round trip to acknowledge a
+  // save makes the slideshow feel broken.
+
+  function updateActionButtons() {
+    const post = posts[currentIndex];
+    const known = post && post.redditId;
+
+    saveBtn.disabled = !known;
+    upvoteBtn.disabled = !known;
+    downvoteBtn.disabled = !known;
+
+    const saved = !!(post && post.saved);
+    saveBtn.classList.toggle("active", saved);
+    saveBtn.textContent = saved ? "★" : "☆";
+    saveBtn.title = saved ? "Unsave from Reddit (S)" : "Save to Reddit (S)";
+
+    upvoteBtn.classList.toggle("active", !!(post && post.likes === true));
+    downvoteBtn.classList.toggle("active", !!(post && post.likes === false));
+  }
+
+  function flagActionFailed(button, message) {
+    console.warn("[reddit-slideshow]", message);
+    button.classList.add("action-failed");
+    setTimeout(() => button.classList.remove("action-failed"), 1500);
+  }
+
+  // Every expanded gallery image is the same Reddit post, so saving one saves
+  // them all — they are updated together or the buttons would disagree.
+  function setPostState(redditId, changes) {
+    posts = posts.map((p) => (p.redditId === redditId ? { ...p, ...changes } : p));
+  }
+
+  async function toggleSave() {
+    const post = posts[currentIndex];
+    if (!post || !post.redditId) return;
+
+    const saved = !post.saved;
+    setPostState(post.redditId, { saved });
+    updateActionButtons();
+
+    const result = await browser.runtime
+      .sendMessage({ type: "savePost", id: post.redditId, saved })
+      .catch(() => ({ error: "Could not reach the background script" }));
+
+    if (!result || result.error) {
+      setPostState(post.redditId, { saved: !saved });
+      updateActionButtons();
+      flagActionFailed(saveBtn, (result && result.error) || "Save failed");
+    }
+  }
+
+  async function vote(dir) {
+    const post = posts[currentIndex];
+    if (!post || !post.redditId) return;
+
+    const previous = post.likes === undefined ? null : post.likes;
+    const wanted = dir === 1 ? true : false;
+    // Pressing the same arrow again takes the vote back, as Reddit's own
+    // buttons do.
+    const next = previous === wanted ? null : wanted;
+    const sentDir = next === null ? 0 : next ? 1 : -1;
+
+    setPostState(post.redditId, { likes: next });
+    updateActionButtons();
+
+    const result = await browser.runtime
+      .sendMessage({ type: "votePost", id: post.redditId, dir: sentDir })
+      .catch(() => ({ error: "Could not reach the background script" }));
+
+    if (!result || result.error) {
+      setPostState(post.redditId, { likes: previous });
+      updateActionButtons();
+      flagActionFailed(dir === 1 ? upvoteBtn : downvoteBtn, (result && result.error) || "Vote failed");
+    }
   }
 
   function updatePostInfo(post) {
@@ -347,6 +430,9 @@
   closeBtn.addEventListener("click", closeSlideshow);
   popoutBtn.addEventListener("click", popOut);
   autoAdvanceBtn.addEventListener("click", toggleAutoAdvance);
+  saveBtn.addEventListener("click", toggleSave);
+  upvoteBtn.addEventListener("click", () => vote(1));
+  downvoteBtn.addEventListener("click", () => vote(-1));
 
   document.addEventListener("keydown", (e) => {
     switch (e.key) {
@@ -359,6 +445,18 @@
       case " ":
         e.preventDefault();
         toggleAutoAdvance();
+        break;
+      case "ArrowUp":
+        e.preventDefault();
+        vote(1);
+        break;
+      case "ArrowDown":
+        e.preventDefault();
+        vote(-1);
+        break;
+      case "s":
+      case "S":
+        toggleSave();
         break;
       case "Escape":
         closeSlideshow();

@@ -33,6 +33,9 @@ function startServer() {
 <div id="top-bar" class="controls">
   <span id="progress">0 / 0</span>
   <div id="top-bar-right">
+    <button id="upvote-btn"></button>
+    <button id="downvote-btn"></button>
+    <button id="save-btn"></button>
     <button id="auto-advance-btn" title="Toggle auto-advance">⏱ Off</button>
     <button id="popout-btn" title="Pop out to window">↗</button>
     <button id="close-btn" title="Close slideshow">✕</button>

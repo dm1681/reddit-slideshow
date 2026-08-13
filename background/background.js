@@ -131,6 +131,9 @@ browser.runtime.onMessage.addListener((message, sender) => {
       return handleGetCurrentState();
     case "getPosts":
       return handleGetPosts(message);
+    case "savePost":
+    case "votePost":
+      return relayToTab(message);
     case "popOut":
       return handlePopOut(sender);
     case "closeSlideshow":
@@ -248,6 +251,32 @@ async function handleGetPosts(message) {
   }
 
   return { posts: session.posts, total: session.posts.length, exhausted: session.exhausted };
+}
+
+// Save and vote have to happen in the Reddit tab: only there is the request
+// same-origin and carrying the viewer's cookies. The session's own copy of the
+// post is updated too, so the state survives a re-render or a pop-out.
+async function relayToTab(message) {
+  if (!session || !session.tabId) return { error: "No active session" };
+
+  try {
+    const result = await browser.tabs.sendMessage(session.tabId, message);
+    if (result && result.success) {
+      session.posts = session.posts.map((post) =>
+        post.redditId === message.id
+          ? {
+              ...post,
+              ...(message.type === "savePost"
+                ? { saved: message.saved }
+                : { likes: message.dir === 1 ? true : message.dir === -1 ? false : null }),
+            }
+          : post
+      );
+    }
+    return result || { error: "No response from the Reddit tab" };
+  } catch (e) {
+    return { error: "The Reddit tab is gone — reopen the slideshow" };
+  }
 }
 
 async function handlePopOut(sender) {

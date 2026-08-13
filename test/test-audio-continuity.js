@@ -74,6 +74,9 @@ const PAGE_HTML = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>renderer harness</title></head>
 <body style="margin:0">
   <div id="top-bar"><span id="progress">0 / 0</span>
+    <button id="upvote-btn"></button>
+    <button id="downvote-btn"></button>
+    <button id="save-btn"></button>
     <button id="auto-advance-btn"></button>
     <button id="popout-btn"></button>
     <button id="close-btn"></button>
