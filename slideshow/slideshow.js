@@ -181,6 +181,11 @@
     // would otherwise sit underneath the console. Only videos pay the
     // clearance; a still keeps the whole frame.
     document.body.classList.toggle("media-video", post.type === "video");
+    // An embed is a cross-origin iframe: it eats mousemove, so the idle fade
+    // has no way to know the viewer is still there and no way to be undone by
+    // pointer. The chrome stays put for these.
+    document.body.classList.toggle("media-embed", post.type === "embed");
+    if (post.type === "embed") resetIdleTimer();
 
     // Update UI
     updatePostInfo(post);
@@ -560,19 +565,44 @@
   }
 
   // --- Idle fade ---
+  //
+  // Hiding the chrome is the whole point, but it was hiding it in ways there
+  // was no way back from:
+  //
+  // - Only mousemove and keydown reset the timer. A cross-origin embed iframe
+  //   swallows both, so while any embed post was on screen the controls faded
+  //   after two seconds and could not be brought back by pointer at all.
+  // - The 2s timer started before the first post had rendered, so the chrome
+  //   was often gone before the viewer had seen it once.
+  // - body.idle set pointer-events:none on the controls, which made the
+  //   invisible console click-through into whatever was underneath — usually
+  //   an embedded player's own controls.
   let idleTimer = null;
-  const IDLE_TIMEOUT = 2000;
+  const IDLE_TIMEOUT = 2600;
+  // Longer the first time: the opening seconds are when a new viewer is
+  // working out what the controls are.
+  const IDLE_TIMEOUT_FIRST = 6000;
+  let idleTimeout = IDLE_TIMEOUT_FIRST;
 
   function resetIdleTimer() {
     document.body.classList.remove("idle");
     clearTimeout(idleTimer);
     idleTimer = setTimeout(() => {
+      // An embed owns the pointer, so fading here would be a one-way door.
+      if (document.body.classList.contains("media-embed")) return;
       document.body.classList.add("idle");
-    }, IDLE_TIMEOUT);
+      idleTimeout = IDLE_TIMEOUT;
+    }, idleTimeout);
   }
 
-  document.addEventListener("mousemove", resetIdleTimer);
-  document.addEventListener("keydown", resetIdleTimer);
+  // pointerdown/wheel/touch as well as mousemove: any of them is the viewer
+  // saying they are still here, and some of them arrive when mousemove cannot.
+  for (const event of ["mousemove", "pointerdown", "click", "wheel", "touchstart", "keydown"]) {
+    document.addEventListener(event, resetIdleTimer, { passive: true });
+  }
+  // Tabbing to a control must show the control being tabbed to.
+  document.addEventListener("focusin", resetIdleTimer);
+  window.addEventListener("focus", resetIdleTimer);
   resetIdleTimer();
 
   // --- Open the post on Reddit ---
@@ -690,6 +720,20 @@
   }
 
   // --- Initialize ---
+  // In overlay mode this page is an iframe injected into reddit.com, and
+  // nothing focused it. Keyboard navigation was dead until the viewer clicked
+  // inside, and the first arrow or Escape went to the Reddit page behind —
+  // where the content script's own Escape listener closed the session outright.
+  function claimFocus() {
+    try {
+      window.focus();
+      document.body.focus({ preventScroll: true });
+    } catch (e) {
+      // Focus can be refused; the click-to-focus path still works.
+    }
+  }
+
   updateAutoAdvanceButton();
+  claimFocus();
   init();
 })();

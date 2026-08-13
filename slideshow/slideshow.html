@@ -6,7 +6,10 @@
   <title>Reddit Slideshow</title>
   <link rel="stylesheet" href="slideshow.css">
 </head>
-<body>
+<!-- tabindex so the page itself can hold focus: in overlay mode this is an
+     iframe on reddit.com, and until something here is focused every keypress
+     goes to the Reddit page behind it. -->
+<body tabindex="-1">
   <!-- Main content area — renderers populate this. Full-bleed: the console
        floats over the scrim rather than the stage being inset for it. -->
   <div id="content-container"></div>

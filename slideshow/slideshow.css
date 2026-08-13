@@ -56,6 +56,14 @@ body {
 body.idle .controls,
 body.idle #scrim {
   opacity: 0;
+}
+
+/* The console keeps catching pointer events while faded — it used to be
+   click-through, which passed clicks into whatever was underneath, usually an
+   embedded player's own controls. But its buttons stop responding, so the
+   click that brings the chrome back cannot also press something the viewer
+   could not see. */
+body.idle #console button {
   pointer-events: none;
 }
 

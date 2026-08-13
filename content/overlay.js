@@ -2,6 +2,9 @@
 
 let overlayElement = null;
 let savedOverflow = null;
+// Elements this overlay made inert, so they can be handed back exactly as
+// found — anything the page had already marked inert is left alone.
+let inertedSiblings = [];
 
 // --- DOM scraping ---
 
@@ -597,6 +600,21 @@ function createOverlay() {
 
   savedOverflow = document.body.style.overflow;
   document.body.style.overflow = "hidden";
+
+  // The page behind is covered but still in the tab order, so Tab used to walk
+  // straight out of the slideshow into Reddit's own links. inert takes the
+  // whole subtree out of focus, hit-testing and the accessibility tree at once.
+  inertedSiblings = [...document.body.children].filter(
+    (el) => el !== overlayElement && !el.inert
+  );
+  inertedSiblings.forEach((el) => {
+    el.inert = true;
+  });
+
+  // Nothing focused the iframe, so keyboard navigation was dead until the
+  // viewer clicked inside it and every keypress before that went to Reddit.
+  iframe.addEventListener("load", () => iframe.focus(), { once: true });
+  iframe.focus();
 }
 
 function removeOverlay() {
@@ -605,6 +623,10 @@ function removeOverlay() {
   overlayElement.remove();
   overlayElement = null;
   document.body.style.overflow = savedOverflow;
+  inertedSiblings.forEach((el) => {
+    el.inert = false;
+  });
+  inertedSiblings = [];
 }
 
 // --- Message handling ---
@@ -638,10 +660,18 @@ async function handleLoadMore() {
   return { posts };
 }
 
-// Listen for Escape key to close overlay
+// Escape closes the overlay — but only when the Reddit page itself has focus.
+//
+// The slideshow iframe has its own Escape handler and its own idea of what
+// closing means. Both used to fire: the iframe asked the background to close
+// the session while this listener tore the overlay down underneath it. Worse,
+// before anything inside the iframe had been focused, every keypress landed
+// here, so the viewer's first Escape killed the session with no warning
+// whatever they thought they were dismissing.
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && overlayElement) {
-    browser.runtime.sendMessage({ type: "closeSlideshow" });
-    removeOverlay();
-  }
+  if (e.key !== "Escape" || !overlayElement) return;
+  // activeElement is the <iframe> whenever focus is anywhere inside it.
+  if (document.activeElement === overlayElement.querySelector("iframe")) return;
+  browser.runtime.sendMessage({ type: "closeSlideshow" });
+  removeOverlay();
 });
