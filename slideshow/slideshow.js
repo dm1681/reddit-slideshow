@@ -97,7 +97,7 @@
     }
 
     const before = posts[currentIndex];
-    posts = next;
+    posts = mergeLocalState(next);
     const after = posts[currentIndex];
 
     // Re-render only when the post on screen actually changed, so an update
@@ -235,9 +235,32 @@
     setTimeout(() => button.classList.remove("action-failed"), 1500);
   }
 
+  // What this page believes about posts the viewer has acted on, keyed by
+  // Reddit fullname.
+  //
+  // The background broadcasts its own copy of the whole post list every time a
+  // redgifs resolution lands, and applyPosts used to install it wholesale.
+  // That raced with the optimistic vote/save: a broadcast arriving between the
+  // button moving and Reddit answering reverted the change, and — because the
+  // post on screen had not otherwise changed — nothing re-rendered to correct
+  // it. The vote looked accepted, then quietly wasn't.
+  //
+  // Both the optimistic write and its rollback go through setPostState, so
+  // whatever ends up here is this page's settled view and outranks anything
+  // the background sends afterwards.
+  const localState = new Map();
+
+  function mergeLocalState(list) {
+    if (localState.size === 0) return list;
+    return list.map((p) =>
+      localState.has(p.redditId) ? { ...p, ...localState.get(p.redditId) } : p
+    );
+  }
+
   // Every expanded gallery image is the same Reddit post, so saving one saves
   // them all — they are updated together or the buttons would disagree.
   function setPostState(redditId, changes) {
+    localState.set(redditId, { ...(localState.get(redditId) || {}), ...changes });
     posts = posts.map((p) => (p.redditId === redditId ? { ...p, ...changes } : p));
   }
 
@@ -334,7 +357,7 @@
           count: 25,
         });
         if (result && !result.error && result.posts) {
-          posts = result.posts;
+          posts = mergeLocalState(result.posts);
           exhausted = result.exhausted || false;
           updateProgress();
           updateNavButtons();
