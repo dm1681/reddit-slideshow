@@ -74,6 +74,12 @@ function classifyUrl(url) {
   if (embedUrl) {
     // Special case: imgur mp4 is a direct video
     if (embedUrl.endsWith(".mp4")) {
+      // A .gifv is a gif imgur re-encoded as mp4 — silent, looping, and
+      // nobody's idea of a video. A bare .mp4 is left alone, since that one
+      // could genuinely carry audio.
+      if (/\.gifv(\?|$)/i.test(url)) {
+        return { type: "video", mediaUrl: embedUrl, isGif: true, hasAudio: false };
+      }
       return { type: "video", mediaUrl: embedUrl };
     }
     return { type: "embed", mediaUrl: embedUrl, originalUrl: url };
@@ -209,6 +215,9 @@ function scrapePosts() {
       spoiler: boolAttr(el, "spoiler"),
       type: classified.type,
       mediaUrl: classified.mediaUrl,
+      // Only named fields are copied off `classified`, so anything new the
+      // classifier learns has to be listed here to survive.
+      ...(classified.isGif ? { isGif: true, hasAudio: false } : {}),
       originalUrl: classified.originalUrl || el.getAttribute("content-href") || "",
       // Carried only until resolvePendingPosts fills in the real media from
       // the post's JSON, and stripped there.
@@ -234,12 +243,14 @@ function scrapePosts() {
       const dataUrl = el.getAttribute("data-url") || "";
       let type = "image";
       let mediaUrl = null;
+      let isGif = false;
 
       if (/\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i.test(dataUrl)) {
         mediaUrl = dataUrl;
       } else if (/\.(mp4|gifv)(\?.*)?$/i.test(dataUrl)) {
         type = "video";
         mediaUrl = dataUrl.replace(/\.gifv$/i, ".mp4");
+        isGif = /\.gifv(\?|$)/i.test(dataUrl);
       } else {
         const embedUrl = getEmbedUrl(dataUrl);
         if (embedUrl) {
@@ -270,6 +281,7 @@ function scrapePosts() {
           spoiler: el.classList.contains("spoiler"),
           type,
           mediaUrl,
+          ...(isGif ? { isGif: true, hasAudio: false } : {}),
           originalUrl: dataUrl,
         });
       }
@@ -306,6 +318,14 @@ async function fetchPostJson(href) {
 
 // gallery_data holds the order, media_metadata the URLs. `s` is the source
 // rendition: `u` for stills, `gif`/`mp4` for animated ones.
+// Returns { url, animated } per item rather than a bare URL. `e` is Reddit's
+// own declaration of what the item is ("Image" / "AnimatedImage"), which beats
+// sniffing the file extension — and downstream it is the difference between a
+// gallery of gifs playing as gifs and playing as a row of silent video files
+// with scrub bars.
+//
+// mp4 is preferred over gif for animated items: same frames, a fraction of the
+// bytes, and hardware decoded.
 function galleryMediaUrls(data) {
   const items = data && data.gallery_data && data.gallery_data.items;
   const meta = data && data.media_metadata;
@@ -315,7 +335,12 @@ function galleryMediaUrls(data) {
     .map((item) => {
       const entry = meta[item.media_id];
       const source = entry && entry.s;
-      return source ? source.u || source.mp4 || source.gif || null : null;
+      if (!source) return null;
+      const animated = entry.e === "AnimatedImage" || !!(source.mp4 || source.gif);
+      const url = animated
+        ? source.mp4 || source.gif || source.u
+        : source.u || source.mp4 || source.gif;
+      return url ? { url, animated } : null;
     })
     .filter(Boolean);
 }
@@ -334,17 +359,28 @@ function withJsonFlags(post, data) {
 
 // One post per image: a slideshow shows one thing at a time, so a gallery that
 // stayed a single post would show only its first image.
-function expandGallery(post, urls) {
+function expandGallery(post, items) {
   const { crosspostHref, galleryHref, ...rest } = post;
-  const multiple = urls.length > 1;
+  const multiple = items.length > 1;
 
-  return urls.map((url, i) => ({
-    ...rest,
-    id: multiple ? `${post.id}-${i + 1}` : post.id,
-    title: multiple ? `${post.title} (${i + 1}/${urls.length})` : post.title,
-    type: /\.mp4(\?|$)/i.test(url) ? "video" : "image",
-    mediaUrl: url,
-  }));
+  return items.map((item, i) => {
+    // An animated item delivered as mp4 is a gif, not a video: silent by
+    // construction, meant to loop, and no use for a scrub bar. A Reddit
+    // gallery cannot contain audio at all, so this is safe to assert rather
+    // than guess — and asserting it is what stops the player prompting
+    // "click for sound" on a clip that has none.
+    const asMp4 = /\.mp4(\?|$)/i.test(item.url);
+    const isGif = item.animated && asMp4;
+
+    return {
+      ...rest,
+      id: multiple ? `${post.id}-${i + 1}` : post.id,
+      title: multiple ? `${post.title} (${i + 1}/${items.length})` : post.title,
+      type: asMp4 ? "video" : "image",
+      mediaUrl: item.url,
+      ...(isGif ? { isGif: true, hasAudio: false } : {}),
+    };
+  });
 }
 
 async function resolveCrosspost(post) {

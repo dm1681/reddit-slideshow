@@ -405,6 +405,78 @@ async function main() {
 
       await page.close();
     }
+
+    // ================================================================
+    // TEST 12: a gif is timed like a still, not like a video
+    // ================================================================
+    // Gallery items and .gifv are gifs re-encoded as mp4. Advancing them on
+    // `ended` meant an eight-item gallery of 1.2s clips was gone in ten
+    // seconds, while a single photo next to it sat for five. They loop, and
+    // they get the still dwell — but never less than one full play.
+    console.log("\nTest: a gif loops and takes the still dwell, not `ended`");
+    {
+      const page = await newPage(browser, baseUrl, { fakeClock: false });
+      await page.evaluate(() =>
+        window.__render(VideoRenderer, {
+          id: "g", type: "video", title: "g", mediaUrl: "/silent.webm", isGif: true, hasAudio: false,
+        })
+      );
+      await page.waitForFunction(() => {
+        const v = document.querySelector("video");
+        return v && v.readyState >= 2;
+      });
+
+      const shape = await page.evaluate(() => {
+        const v = document.querySelector("video");
+        return { loop: v.loop, controls: v.controls, muted: v.muted, duration: v.duration };
+      });
+      assert(shape.loop === true, "A gif loops even with auto-advance waiting on it");
+      assert(shape.controls === false, "A gif has no scrub bar");
+      assert(shape.muted === true, "A gif starts muted, so no 'click for sound' prompt for silence");
+      assert(shape.duration < 4, `Fixture is shorter than the dwell (${shape.duration.toFixed(2)}s)`);
+
+      // Well past the clip's own end: advancing here would be the `ended`
+      // behaviour this replaces.
+      await page.waitForTimeout(3000);
+      assert(
+        (await page.evaluate(() => window.__advances)) === 0,
+        "Has not advanced at the end of the first loop"
+      );
+
+      await page.waitForFunction(() => window.__advances > 0, null, { timeout: 6000 }).catch(() => {});
+      assert(
+        (await page.evaluate(() => window.__advances)) === 1,
+        "Advances once, on the dwell"
+      );
+
+      await page.close();
+    }
+
+    // ================================================================
+    // TEST 13: a torn-down gif never advances
+    // ================================================================
+    // The gif path adds a timer of its own, and every timer in this file has
+    // to die with the renderer that armed it.
+    console.log("\nTest: a gif torn down before its dwell never advances");
+    {
+      const page = await newPage(browser, baseUrl, { fakeClock: false });
+      await page.evaluate(() =>
+        window.__render(VideoRenderer, {
+          id: "g", type: "video", title: "g", mediaUrl: "/silent.webm", isGif: true, hasAudio: false,
+        })
+      );
+      await page.waitForFunction(() => {
+        const v = document.querySelector("video");
+        return v && v.readyState >= 2;
+      });
+
+      await page.waitForTimeout(300);
+      await page.evaluate(() => window.__cleanup());
+      await page.waitForTimeout(6000);
+
+      assert((await page.evaluate(() => window.__advances)) === 0, "No advance after teardown");
+      await page.close();
+    }
   } finally {
     await browser.close();
     server.close();

@@ -285,7 +285,12 @@
     // A video carries Firefox's own control bar along its bottom edge, which
     // would otherwise sit underneath the console. Only videos pay the
     // clearance; a still keeps the whole frame.
-    document.body.classList.toggle("media-video", !gated && post.type === "video");
+    // Only a video with a native control bar needs the clearance. A gif has
+    // controls off, so it keeps the whole frame.
+    document.body.classList.toggle(
+      "media-video",
+      !gated && post.type === "video" && post.isGif !== true
+    );
     // An embed is a cross-origin iframe: it eats mousemove, so the idle fade
     // has no way to know the viewer is still there and no way to be undone by
     // pointer. The chrome stays put for these.
