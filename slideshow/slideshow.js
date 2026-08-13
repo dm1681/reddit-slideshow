@@ -22,6 +22,11 @@
   const openBtn = document.getElementById("open-btn");
   const upvoteBtn = document.getElementById("upvote-btn");
   const downvoteBtn = document.getElementById("downvote-btn");
+  const reelBtn = document.getElementById("reel-btn");
+
+  // The Reel is optional: the controller works without it, and the standalone
+  // harnesses do not load it.
+  const reelOpen = () => typeof Reel !== "undefined" && Reel.isOpen();
 
   // --- State ---
   let posts = [];
@@ -691,6 +696,8 @@
     idleTimer = setTimeout(() => {
       // An embed owns the pointer, so fading here would be a one-way door.
       if (document.body.classList.contains("media-embed")) return;
+      // Nor while the viewer is reading the panel they just opened.
+      if (reelOpen()) return;
       document.body.classList.add("idle");
       idleTimeout = IDLE_TIMEOUT;
     }, idleTimeout);
@@ -780,10 +787,20 @@
 
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
-      closeSlideshow();
+      // Escape dismisses the panel first. Closing the whole slideshow because
+      // the viewer wanted to put a settings panel away would be a rude
+      // surprise.
+      if (reelOpen()) Reel.close();
+      else closeSlideshow();
       return;
     }
     if (shouldIgnoreKey(e)) return;
+
+    // With the panel up, its own controls own the keyboard.
+    if (reelOpen()) {
+      if (e.key === "?") Reel.close();
+      return;
+    }
 
     switch (e.key) {
       case "ArrowLeft":
@@ -815,6 +832,9 @@
       case "r":
       case "R":
         revealCurrent();
+        break;
+      case "?":
+        Reel.toggle();
         break;
     }
   });
@@ -848,6 +868,7 @@
   }
 
   updateAutoAdvanceButton();
+  if (typeof Reel !== "undefined") Reel.init({ opener: reelBtn });
   claimFocus();
   init();
 })();
