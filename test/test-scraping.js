@@ -277,6 +277,114 @@ async function main() {
   assert(unresolvable.dropped === 2, `Unresolvable crosspost and gallery are dropped (dropped ${unresolvable.dropped})`);
   assert(!unresolvable.stillThere, "Neither reaches the slideshow")
 
+  // --- Reddit actions (save / vote) ---
+  // These run in the content script because that is the only place where the
+  // request is same-origin and carries the viewer's cookies.
+  console.log("\nTest: save and vote go to Reddit with the session's modhash");
+  const actions = await page.evaluate(async (fnSrc) => {
+    eval(fnSrc);
+
+    const calls = [];
+    window.fetch = async (url, opts) => {
+      calls.push({ url, method: (opts && opts.method) || "GET", headers: (opts && opts.headers) || {}, body: opts && opts.body });
+      if (url.includes("/api/me.json")) {
+        return { ok: true, json: async () => ({ data: { modhash: "MODHASH123" } }) };
+      }
+      return { ok: true, json: async () => ({}), text: async () => "{}" };
+    };
+
+    const saved = await handleSavePost({ id: "t3_abc", saved: true });
+    const unsaved = await handleSavePost({ id: "t3_abc", saved: false });
+    const voted = await handleVotePost({ id: "t3_abc", dir: 1 });
+
+    return { calls, saved, unsaved, voted };
+  }, scrapeCode);
+
+  const posted = actions.calls.filter((c) => c.method === "POST");
+  assert(actions.saved.success === true, `Save reports success (got ${JSON.stringify(actions.saved)})`);
+  assert(
+    posted[0] && posted[0].url.endsWith("/api/save") && posted[0].body === "id=t3_abc",
+    `Save posts the id to /api/save (got ${posted[0] && posted[0].url} body=${posted[0] && posted[0].body})`
+  );
+  assert(
+    posted[0] && posted[0].headers["X-Modhash"] === "MODHASH123",
+    "Save carries the session modhash"
+  );
+  assert(posted[1] && posted[1].url.endsWith("/api/unsave"), `Unsaving uses /api/unsave (got ${posted[1] && posted[1].url})`);
+  assert(
+    posted[2] && posted[2].url.endsWith("/api/vote") && posted[2].body.includes("dir=1"),
+    `Voting posts a direction (got ${posted[2] && posted[2].body})`
+  );
+  // The modhash costs one request, not one per action.
+  assert(
+    actions.calls.filter((c) => c.url.includes("/api/me.json")).length === 1,
+    `The modhash is fetched once and reused (got ${actions.calls.filter((c) => c.url.includes("/api/me.json")).length})`
+  );
+
+  console.log("\nTest: a signed-out viewer gets an error, not a silent no-op");
+  const signedOut = await page.evaluate(async (fnSrc) => {
+    eval(fnSrc);
+    let posts = 0;
+    window.fetch = async (url, opts) => {
+      if (opts && opts.method === "POST") posts++;
+      if (url.includes("/api/me.json")) return { ok: true, json: async () => ({ data: {} }) };
+      return { ok: true, json: async () => ({}) };
+    };
+    const result = await handleSavePost({ id: "t3_abc", saved: true });
+    return { result, posts };
+  }, scrapeCode);
+
+  assert(!!signedOut.result.error, `Reports an error when signed out (got ${JSON.stringify(signedOut.result)})`);
+  assert(signedOut.posts === 0, "Sends nothing to Reddit when there is no modhash");
+
+  console.log("\nTest: saved and vote state is attached to scraped posts");
+  const userState = await page.evaluate(async (fnSrc) => {
+    eval(fnSrc);
+    const requested = [];
+    window.fetch = async (url) => {
+      requested.push(url);
+      return {
+        ok: true,
+        json: async () => ({
+          data: {
+            children: [
+              { data: { name: "t3_post001", saved: true, likes: true } },
+              { data: { name: "t3_post002", saved: false, likes: null } },
+            ],
+          },
+        }),
+      };
+    };
+
+    // Two slides from one gallery post share a Reddit id, so both must pick up
+    // the same saved state or the button would flicker between images.
+    const posts = [
+      { id: "t3_post001", redditId: "t3_post001", type: "image" },
+      { id: "t3_post001-2", redditId: "t3_post001", type: "image" },
+      { id: "t3_post002", redditId: "t3_post002", type: "image" },
+      { id: "local-only", redditId: undefined, type: "image" },
+    ];
+    const withState = await attachUserState(posts);
+    return { requested, withState };
+  }, scrapeCode);
+
+  assert(
+    userState.requested.length === 1 && userState.requested[0].includes("id=t3_post001,t3_post002"),
+    `Asks for every post in one request, de-duplicated (got ${JSON.stringify(userState.requested)})`
+  );
+  assert(
+    userState.withState[0].saved === true && userState.withState[0].likes === true,
+    "Saved and vote state land on the post"
+  );
+  assert(
+    userState.withState[1].saved === true,
+    "Both slides of one gallery post carry the same saved state"
+  );
+  assert(
+    userState.withState[2].saved === false && userState.withState[3].saved === undefined,
+    "Posts Reddit knows nothing about are left alone"
+  );
+
   console.log(`\n--- Results: ${passed} passed, ${failed} failed ---`);
 
   await browser.close();

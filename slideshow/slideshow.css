@@ -71,6 +71,31 @@ body.idle {
   color: #fff;
 }
 
+/* Reddit's own colours, so an active vote or a saved post reads at a glance
+   rather than being a slightly brighter grey. */
+#save-btn.active {
+  background: rgba(255, 180, 0, 0.25);
+  border-color: rgba(255, 180, 0, 0.6);
+  color: #ffc83d;
+}
+
+#upvote-btn.active {
+  background: rgba(255, 69, 0, 0.25);
+  border-color: rgba(255, 69, 0, 0.6);
+  color: #ff4500;
+}
+
+#downvote-btn.active {
+  background: rgba(113, 147, 255, 0.25);
+  border-color: rgba(113, 147, 255, 0.6);
+  color: #7193ff;
+}
+
+/* A rejected action should not leave the button lying about the state. */
+#top-bar button.action-failed {
+  border-color: rgba(255, 80, 80, 0.8);
+}
+
 #close-btn {
   font-size: 18px;
   padding: 2px 10px;
