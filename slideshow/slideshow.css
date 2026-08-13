@@ -124,6 +124,72 @@ body.media-video #content-container {
   line-height: 1.5;
 }
 
+/* --- Adult / spoiler gate ----------------------------------------------- */
+
+/* No blur here on purpose. The media URL is never handed to an element for a
+   gated post, so there is nothing on the page to blur — a CSS blur would mean
+   the file had already been downloaded and decoded. */
+.gate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  max-width: 40ch;
+  padding: clamp(22px, 4vh, 38px) clamp(24px, 4vw, 44px);
+  text-align: center;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 14px;
+}
+
+.gate-tag {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--bad);
+  border: 1px solid rgba(255, 107, 107, 0.5);
+  background: rgba(255, 107, 107, 0.12);
+  border-radius: 100px;
+  padding: 4px 11px;
+}
+
+.gate-title {
+  font-size: clamp(15px, 2vh, 18px);
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--ink);
+  user-select: text;
+}
+
+.gate-reveal {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--btn-hover);
+  border: 1px solid var(--btn-line);
+  border-radius: 8px;
+  padding: 9px 18px;
+  cursor: pointer;
+}
+
+.gate-reveal:hover {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.gate-reveal:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.85);
+}
+
+.gate-note {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+
 /* --- Scrim -------------------------------------------------------------- */
 
 /* Page-level, not a child of the media: parented to the stage it would not

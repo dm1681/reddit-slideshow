@@ -35,6 +35,100 @@
   // (older) snapshot cannot overwrite it.
   let pendingPosts = null;
 
+  // --- Adult / spoiler gate ---
+  //
+  // Reddit puts a click-through in front of this content and the slideshow
+  // removed it, painting adult media unblurred at full screen — while the
+  // manifest asks for redgifs host permission and the background carries a
+  // dedicated redgifs resolver. So the gate is not a nicety.
+  //
+  // It works by withholding the URL, not by blurring. filter:blur() still
+  // downloads and decodes the whole image; it is a cosmetic screen over
+  // content that has already arrived, not a gate.
+  //
+  // Revealing is per post and lasts the session. The global switch is in the
+  // Reel panel and the popup, and is remembered between sessions.
+  const revealed = new Set();
+
+  function maskEnabled() {
+    return typeof SlideshowSettings === "undefined" || SlideshowSettings.get("maskNsfw");
+  }
+
+  function gateReason(post) {
+    if (!post) return null;
+    if (post.nsfw) return "Adult";
+    if (post.spoiler) return "Spoiler";
+    return null;
+  }
+
+  function isGated(post) {
+    return !!post && !!gateReason(post) && maskEnabled() && !revealed.has(post.id);
+  }
+
+  // Short, so a session with the mask on does not stall on a wall of grey
+  // cards — but not instant, or the viewer never sees what was skipped.
+  const GATE_DWELL_MS = 2500;
+
+  function renderGate(post, onEnded) {
+    const reason = gateReason(post);
+
+    const card = document.createElement("div");
+    card.className = "gate";
+
+    const tag = document.createElement("span");
+    tag.className = "gate-tag";
+    tag.textContent = reason === "Adult" ? "18+ Adult" : "Spoiler";
+    card.appendChild(tag);
+
+    const heading = document.createElement("p");
+    heading.className = "gate-title";
+    heading.textContent = post.title || "(untitled post)";
+    card.appendChild(heading);
+
+    const reveal = document.createElement("button");
+    reveal.type = "button";
+    reveal.className = "gate-reveal";
+    reveal.textContent = "Reveal this post  (R)";
+    reveal.addEventListener("click", revealCurrent);
+    card.appendChild(reveal);
+
+    const note = document.createElement("p");
+    note.className = "gate-note";
+    note.textContent = "Hidden because it is tagged " + reason.toLowerCase() +
+      ". Turn the mask off for good in the Reel panel (?).";
+    card.appendChild(note);
+
+    contentContainer.textContent = "";
+    contentContainer.appendChild(card);
+
+    let timer = null;
+    let cancelled = false;
+    if (onEnded) {
+      timer = setTimeout(() => {
+        if (!cancelled) onEnded();
+      }, GATE_DWELL_MS);
+    }
+
+    // Same contract as a renderer: after cleanup, nothing advances.
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      contentContainer.textContent = "";
+    };
+  }
+
+  function revealCurrent() {
+    const post = posts[currentIndex];
+    if (!post || !isGated(post)) return;
+    revealed.add(post.id);
+    renderCurrentPost();
+  }
+
+  function toggleMask() {
+    if (typeof SlideshowSettings === "undefined") return;
+    SlideshowSettings.set("maskNsfw", !SlideshowSettings.get("maskNsfw"));
+  }
+
   // Errors and empty states are the only thing on screen when they appear, so
   // they get real type rather than 12px of #777 on black.
   function showMessage(text) {
@@ -165,7 +259,12 @@
     // Get renderer for post type
     const renderer = renderers[post.type];
     const onEnded = autoAdvanceOn ? () => autoAdvanceNext() : null;
-    if (renderer) {
+    const gated = isGated(post);
+    if (gated) {
+      // Deliberately before the renderer: nothing must be handed the media URL
+      // for a gated post, or the file is fetched and decoded regardless.
+      cleanupCurrentRender = renderGate(post, onEnded);
+    } else if (renderer) {
       // A resolved video keeps the player it was resolved from, so a file that
       // will not play falls back to that instead of costing the post.
       const onFail =
@@ -180,12 +279,12 @@
     // A video carries Firefox's own control bar along its bottom edge, which
     // would otherwise sit underneath the console. Only videos pay the
     // clearance; a still keeps the whole frame.
-    document.body.classList.toggle("media-video", post.type === "video");
+    document.body.classList.toggle("media-video", !gated && post.type === "video");
     // An embed is a cross-origin iframe: it eats mousemove, so the idle fade
     // has no way to know the viewer is still there and no way to be undone by
     // pointer. The chrome stays put for these.
-    document.body.classList.toggle("media-embed", post.type === "embed");
-    if (post.type === "embed") resetIdleTimer();
+    document.body.classList.toggle("media-embed", !gated && post.type === "embed");
+    if (!gated && post.type === "embed") resetIdleTimer();
 
     // Update UI
     updatePostInfo(post);
@@ -412,7 +511,9 @@
 
   function preloadNext() {
     const nextPost = posts[currentIndex + 1];
-    if (nextPost) {
+    // A gated post is not preloaded: fetching it in advance would download the
+    // very thing the gate exists to withhold.
+    if (nextPost && !isGated(nextPost)) {
       const renderer = renderers[nextPost.type];
       if (renderer && renderer.preload) {
         renderer.preload(nextPost);
@@ -711,8 +812,21 @@
       case "O":
         openPost();
         break;
+      case "r":
+      case "R":
+        revealCurrent();
+        break;
     }
   });
+
+  // The global mask switch lives in the Reel panel and the popup, so the
+  // change can arrive from outside this module. Re-render so the post on
+  // screen obeys it immediately rather than on the next slide.
+  if (typeof SlideshowSettings !== "undefined") {
+    SlideshowSettings.onChange((key) => {
+      if (key === "maskNsfw") renderCurrentPost();
+    });
+  }
 
   // Hide pop-out button in pop-out mode (already popped out)
   if (mode === "popout") {
