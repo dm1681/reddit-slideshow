@@ -124,6 +124,110 @@ body.media-video #content-container {
   line-height: 1.5;
 }
 
+/* --- Media failure ------------------------------------------------------ */
+
+/* Shares the gate's shape deliberately: both are "the stage cannot show you
+   the thing", and they should read as the same kind of moment. */
+.media-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  max-width: 48ch;
+  padding: clamp(20px, 3.5vh, 34px) clamp(24px, 4vw, 40px);
+  text-align: center;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 14px;
+}
+
+.media-error-tag {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  border: 1px solid var(--btn-line);
+  border-radius: 100px;
+  padding: 4px 11px;
+}
+
+.media-error-heading {
+  font-size: clamp(15px, 2vh, 18px);
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ink);
+  text-wrap: balance;
+}
+
+.media-error-detail {
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+
+.media-error-detail:empty {
+  display: none;
+}
+
+.media-error-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.media-error-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--btn-hover);
+  border: 1px solid var(--btn-line);
+  border-radius: 8px;
+  padding: 8px 15px;
+  cursor: pointer;
+}
+
+.media-error-action:hover {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.media-error-action:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.85);
+}
+
+.media-error-key {
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--ink-2);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--btn-line);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+.media-error-note {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+/* Useless to most people, and the first thing anyone debugging this wants. */
+.media-error-url {
+  max-width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: var(--ink-3);
+  overflow-wrap: anywhere;
+  user-select: text;
+  opacity: 0.75;
+}
+
 /* --- Adult / spoiler gate ----------------------------------------------- */
 
 /* No blur here on purpose. The media URL is never handed to an element for a

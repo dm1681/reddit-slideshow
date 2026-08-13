@@ -217,7 +217,7 @@ async function main() {
         await page.clock.runFor(600);
         await page.waitForTimeout(120);
         failedShown = await page.evaluate(() =>
-          document.getElementById("content-container").textContent.includes("Failed")
+          !!document.querySelector("#content-container .media-error")
         );
       }
       assert(failedShown, "Reports the failure after its retries");
@@ -377,9 +377,11 @@ async function main() {
           () => failed++
         );
         await new Promise((r) => setTimeout(r, 3000));
-        const text = container.textContent;
+        // Read before cleanup: teardown empties the container, so a query
+        // afterwards reports "no error" no matter what was there.
+        const showsError = !!container.querySelector(".media-error");
         cleanup();
-        return { failed, showsError: text.includes("Failed") };
+        return { failed, showsError };
       });
 
       assert(withFallback.failed === 1, `Falls back exactly once (got ${withFallback.failed})`);
@@ -395,9 +397,9 @@ async function main() {
           () => advances++
         );
         await new Promise((r) => setTimeout(r, 4000));
-        const text = container.textContent;
+        const showsError = !!container.querySelector(".media-error");
         cleanup();
-        return { advances, showsError: text.includes("Failed") };
+        return { advances, showsError };
       });
 
       assert(withoutFallback.showsError, "Reports the failure when there is nothing to fall back to");

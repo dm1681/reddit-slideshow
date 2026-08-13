@@ -814,6 +814,9 @@
   saveBtn.addEventListener("click", toggleSave);
   openBtn.addEventListener("click", openPost);
   fullscreenBtn.addEventListener("click", toggleFullscreen);
+  // Raised by the media-failure card, which has no business knowing about the
+  // background script.
+  document.addEventListener("slideshow:openpost", openPost);
   upvoteBtn.addEventListener("click", () => vote(1));
   downvoteBtn.addEventListener("click", () => vote(-1));
 

@@ -109,6 +109,7 @@ const VideoRenderer = {
     let errorTimer = null;
     let retryTimer = null;
     let gifTimer = null;
+    let failureCard = null;
     let retried = false;
 
     function clearSoundHint() {
@@ -208,11 +209,26 @@ const VideoRenderer = {
       // moved to.
       if (cancelled) return;
       spinner.remove();
-      const errDiv = document.createElement("div");
-      errDiv.style.cssText = "color:#777;font-size:14px;";
-      errDiv.textContent = "Failed to load video";
-      container.innerHTML = "";
-      container.appendChild(errDiv);
+
+      // video.error carries a code Firefox worked out itself — unsupported
+      // codec, decode failure, interrupted download — which is better than
+      // anything that can be inferred from the URL.
+      const code = video.error ? video.error.code : null;
+      if (typeof MediaFailure === "undefined") {
+        const errDiv = document.createElement("div");
+        errDiv.className = "media-error slide-message";
+        errDiv.textContent = "Could not load this video";
+        container.textContent = "";
+        container.appendChild(errDiv);
+      } else {
+        failureCard = MediaFailure.show(container, {
+          post,
+          url: post.mediaUrl,
+          kind: "video",
+          code,
+          willAdvance: !!onEnded,
+        });
+      }
 
       // A video that never loads never fires `ended`, so auto-advance would
       // stop here for good. Same 2s grace the image renderer gives an error.
@@ -279,6 +295,7 @@ const VideoRenderer = {
       if (errorTimer) clearTimeout(errorTimer);
       if (retryTimer) clearTimeout(retryTimer);
       if (gifTimer) clearTimeout(gifTimer);
+      if (failureCard) failureCard.cancel();
       clearSoundHint();
       video.pause();
       video.src = "";

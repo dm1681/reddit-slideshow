@@ -406,11 +406,14 @@ async function main() {
         );
         await new Promise((r) => setTimeout(r, 3000));
         const text = container.textContent;
+        // The class, not the copy: asserting on user-facing wording means the
+        // test breaks every time the message is improved.
+        const hasError = !!container.querySelector(".media-error");
         cleanup();
-        return { advances, text };
+        return { advances, text, hasError };
       });
 
-      assert(advanced.text.includes("Failed to load"), `Broken video reports the failure (got ${JSON.stringify(advanced.text)})`);
+      assert(advanced.hasError, `Broken video reports the failure (got ${JSON.stringify(advanced.text)})`);
       assert(advanced.advances === 1, `Auto-advance moves on from a broken video (advanced ${advanced.advances} times)`);
 
       // The queued advance belongs to a slide that no longer exists.
