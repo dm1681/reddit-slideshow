@@ -1,4 +1,33 @@
-/* Reddit Slideshow — dark cinematic theme with fade-on-idle controls */
+/* Reddit Slideshow — dark cinematic theme.
+ *
+ * One console rather than four scattered widgets. The media stays full-bleed
+ * and the console floats over a scrim, rather than the stage being permanently
+ * inset for chrome that is hidden most of the time.
+ *
+ * Everything is sized in clamp()/vh because this renders at three quite
+ * different sizes: the 1200x800 pop-out, a fullscreen tab, and the in-page
+ * overlay iframe — which is 100vh of the browser viewport, so roughly 600px on
+ * a laptop. Fixed heights clip silently under body{overflow:hidden}.
+ */
+
+:root {
+  --ink: #ededed;
+  --ink-2: #9a9a9a;      /* 4.4:1 on #777 was below AA; this clears it */
+  --ink-3: #6f6f6f;
+  --panel: rgba(18, 18, 20, 0.74);
+  --panel-line: rgba(255, 255, 255, 0.11);
+  --btn: rgba(255, 255, 255, 0.07);
+  --btn-hover: rgba(255, 255, 255, 0.15);
+  --btn-line: rgba(255, 255, 255, 0.14);
+  --accent: #4a9eff;
+  --up: #ff4500;
+  --down: #7193ff;
+  --save: #ffc83d;
+  --bad: #ff6b6b;
+  /* How much room the console occupies, for the few things that must clear
+     it — a video's own native control bar, mainly. */
+  --console-space: clamp(96px, 17vh, 150px);
+}
 
 * {
   margin: 0;
@@ -8,8 +37,9 @@
 
 body {
   background: #0a0a0a;
-  color: #e0e0e0;
+  color: var(--ink);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-variant-numeric: tabular-nums;
   overflow: hidden;
   width: 100vw;
   height: 100vh;
@@ -23,7 +53,8 @@ body {
   opacity: 1;
 }
 
-body.idle .controls {
+body.idle .controls,
+body.idle #scrim {
   opacity: 0;
   pointer-events: none;
 }
@@ -32,189 +63,31 @@ body.idle {
   cursor: none;
 }
 
-/* Top bar */
-#top-bar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 20px;
-  z-index: 100;
-}
+/* --- Content stage ------------------------------------------------------ */
 
-#progress {
-  color: #aaa;
-  font-size: 14px;
-}
-
-#top-bar-right {
-  display: flex;
-  gap: 8px;
-}
-
-#top-bar button {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #ccc;
-  padding: 4px 12px;
-  border-radius: 4px;
-  font-size: 13px;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-#top-bar button:hover {
-  background: rgba(255, 255, 255, 0.2);
-  color: #fff;
-}
-
-/* Reddit's own colours, so an active vote or a saved post reads at a glance
-   rather than being a slightly brighter grey. */
-#save-btn.active {
-  background: rgba(255, 180, 0, 0.25);
-  border-color: rgba(255, 180, 0, 0.6);
-  color: #ffc83d;
-}
-
-#upvote-btn.active {
-  background: rgba(255, 69, 0, 0.25);
-  border-color: rgba(255, 69, 0, 0.6);
-  color: #ff4500;
-}
-
-#downvote-btn.active {
-  background: rgba(113, 147, 255, 0.25);
-  border-color: rgba(113, 147, 255, 0.6);
-  color: #7193ff;
-}
-
-/* A rejected action should not leave the button lying about the state. */
-#top-bar button.action-failed {
-  border-color: rgba(255, 80, 80, 0.8);
-}
-
-#close-btn {
-  font-size: 18px;
-  padding: 2px 10px;
-}
-
-/* Navigation arrows */
-.nav-arrow {
-  position: fixed;
-  top: 50%;
-  transform: translateY(-50%);
-  background: rgba(255, 255, 255, 0.1);
-  border: none;
-  color: #fff;
-  font-size: 32px;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-  transition: background 0.2s, opacity 0.3s ease;
-}
-
-.nav-arrow:hover {
-  background: rgba(255, 255, 255, 0.25);
-}
-
-#prev-btn {
-  left: 20px;
-}
-
-#next-btn {
-  right: 20px;
-}
-
-.nav-arrow:disabled {
-  opacity: 0.2;
-  cursor: default;
-}
-
-/* Content container */
 #content-container {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 60px 80px 100px;
+  padding: clamp(12px, 2vh, 24px);
 }
 
-/* Post info */
-#post-info {
-  position: fixed;
-  bottom: 20px;
-  left: 0;
-  right: 0;
-  text-align: center;
-  padding: 0 80px;
-  z-index: 100;
+/* A video carries Firefox's own control bar along its bottom edge, which would
+   land underneath the console. Only videos pay for the clearance. */
+body.media-video #content-container {
+  padding-bottom: var(--console-space);
 }
 
-#post-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: #e0e0e0;
-  margin-bottom: 4px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-#post-meta {
-  font-size: 12px;
-  color: #777;
-}
-
-/* Progress bar */
-#progress-bar {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: #222;
-  z-index: 100;
-}
-
-#progress-bar-fill {
-  height: 100%;
-  background: #4a9eff;
-  border-radius: 0 2px 2px 0;
-  transition: width 0.3s ease;
-  width: 0%;
-}
-
-/* Loading spinner */
-.loading-spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid #333;
-  border-top-color: #4a9eff;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-/* Image styles (used by image renderer) */
-#content-container img {
+#content-container img,
+#content-container video {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
+}
+
+#content-container img {
   opacity: 0;
   transition: opacity 0.3s ease;
 }
@@ -223,17 +96,348 @@ body.idle {
   opacity: 1;
 }
 
-/* Video styles */
 #content-container video {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
   outline: none;
 }
 
-/* Embed styles (iframe) */
 #content-container iframe {
   width: 100%;
   height: 100%;
   border: none;
+}
+
+/* Errors and empty states are the only thing on screen when they appear, so
+   they are not the place to be quiet. */
+.slide-message {
+  color: var(--ink-2);
+  font-size: 15px;
+  text-align: center;
+  max-width: 46ch;
+  line-height: 1.5;
+}
+
+/* --- Scrim -------------------------------------------------------------- */
+
+/* Page-level, not a child of the media: parented to the stage it would not
+   cover console edges that extend past a portrait frame, and the title would
+   vanish over a bright image. */
+#scrim {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: min(46vh, 380px);
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.88) 0%,
+    rgba(0, 0, 0, 0.62) 38%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  pointer-events: none;
+  z-index: 90;
+  transition: opacity 0.3s ease;
+}
+
+/* --- Console ------------------------------------------------------------ */
+
+#console {
+  position: fixed;
+  left: clamp(10px, 1.4vw, 20px);
+  right: clamp(10px, 1.4vw, 20px);
+  bottom: clamp(10px, 1.4vh, 18px);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(6px, 1vh, 11px);
+  padding: clamp(10px, 1.6vh, 16px) clamp(12px, 1.6vw, 20px) clamp(8px, 1.2vh, 12px);
+  background: var(--panel);
+  backdrop-filter: blur(18px) saturate(1.25);
+  border: 1px solid var(--panel-line);
+  border-radius: 12px;
+}
+
+#console-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: clamp(12px, 2vw, 28px);
+}
+
+/* --- Title block --- */
+
+#titleblock {
+  min-width: 0; /* so the title can actually ellipsis inside a flex row */
+  flex: 1 1 auto;
+}
+
+#post-title {
+  font-size: clamp(14px, 1.7vh, 17px);
+  font-weight: 600;
+  line-height: 1.32;
+  color: var(--ink);
+  /* Two lines, not one. A single nowrap line threw away most of the title of
+     any post that had something to say. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  /* Titles are worth copying. */
+  user-select: text;
+}
+
+#post-meta {
+  margin-top: 3px;
+  font-size: clamp(11px, 1.3vh, 12.5px);
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#post-meta .flair {
+  display: inline-block;
+  padding: 1px 6px;
+  margin-right: 6px;
+  border-radius: 100px;
+  background: rgba(255, 255, 255, 0.09);
+  color: var(--ink);
+  font-size: 0.92em;
+}
+
+/* --- Actions --- */
+
+#actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 0 0 auto;
+}
+
+#console button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: var(--btn);
+  border: 1px solid var(--btn-line);
+  color: var(--ink);
+  padding: 6px 10px;
+  min-height: 32px;
+  min-width: 32px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-family: inherit;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+#console button:hover:not(:disabled) {
+  background: var(--btn-hover);
+}
+
+#console button:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+
+/* One ring, in a colour that is never an active state — over arbitrary media
+   you otherwise cannot tell focus from selection. The dark halo keeps it
+   visible on a white frame. */
+#console button:focus-visible,
+#console [tabindex]:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.85);
+}
+
+.labelled .glyph {
+  font-size: 14px;
+}
+
+#step {
+  display: flex;
+  gap: 3px;
+  margin-right: 3px;
+}
+
+#step button {
+  font-size: 19px;
+  padding: 4px 9px;
+}
+
+/* --- Vote pill --- */
+
+#votepill {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--btn-line);
+  border-radius: 8px;
+  background: var(--btn);
+}
+
+#votepill button {
+  border: none;
+  background: transparent;
+  font-size: 11px;
+  padding: 5px 7px;
+  min-height: 26px;
+  min-width: 26px;
+}
+
+#score {
+  font-size: 12.5px;
+  color: var(--ink-2);
+  padding: 0 4px;
+  min-width: 2.5ch;
+  text-align: center;
+}
+
+#score:empty {
+  display: none;
+}
+
+/* Reddit's own colours, so an active vote or a saved post reads at a glance
+   rather than being a slightly brighter grey. The label changes too — state
+   that lives only in a colour is state a screen reader never hears. */
+#upvote-btn[aria-pressed="true"] {
+  background: rgba(255, 69, 0, 0.22);
+  color: var(--up);
+}
+
+#downvote-btn[aria-pressed="true"] {
+  background: rgba(113, 147, 255, 0.22);
+  color: var(--down);
+}
+
+#votepill:has(#upvote-btn[aria-pressed="true"]) #score {
+  color: var(--up);
+}
+
+#votepill:has(#downvote-btn[aria-pressed="true"]) #score {
+  color: var(--down);
+}
+
+#save-btn[aria-pressed="true"] {
+  background: rgba(255, 180, 0, 0.2);
+  border-color: rgba(255, 180, 0, 0.5);
+  color: var(--save);
+}
+
+#auto-advance-btn[aria-pressed="true"] {
+  background: rgba(74, 158, 255, 0.2);
+  border-color: rgba(74, 158, 255, 0.5);
+  color: var(--accent);
+}
+
+.vrule {
+  width: 1px;
+  align-self: stretch;
+  margin: 2px 3px;
+  background: var(--panel-line);
+}
+
+/* --- Position rail --- */
+
+#console-rail {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 11.5px;
+  color: var(--ink-2);
+}
+
+#progress {
+  flex: 0 0 auto;
+  letter-spacing: 0.02em;
+}
+
+#ticks {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 10px;
+  min-width: 0;
+}
+
+#ticks i {
+  flex: 1 1 0;
+  min-width: 1px;
+  height: 2px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+#ticks i.seen {
+  background: rgba(255, 255, 255, 0.32);
+}
+
+#ticks i.current {
+  height: 10px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+#rail-note {
+  flex: 0 0 auto;
+  color: var(--ink-3);
+}
+
+#rail-note:empty {
+  display: none;
+}
+
+body.at-end #progress {
+  color: var(--save);
+}
+
+/* A rejected action must not leave the button lying about the state. */
+#console button.action-failed {
+  border-color: var(--bad);
+  color: var(--bad);
+}
+
+/* --- Loading spinner ---------------------------------------------------- */
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #333;
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* --- Narrow / short viewports ------------------------------------------- */
+
+/* The in-page overlay on a laptop is roughly 600px tall, and the pop-out is
+   1200x800. Drop the least load-bearing parts rather than letting the console
+   grow until it clips. */
+@media (max-height: 560px), (max-width: 700px) {
+  #post-meta { display: none; }
+  #console-rail { gap: 8px; }
+  .labelled .text { display: none; }
+}
+
+@media (max-width: 520px) {
+  #console-main { flex-direction: column; align-items: stretch; }
+  #actions { justify-content: space-between; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

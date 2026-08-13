@@ -7,35 +7,57 @@
   <link rel="stylesheet" href="slideshow.css">
 </head>
 <body>
-  <!-- Top bar: progress, auto-advance, pop-out, close -->
-  <div id="top-bar" class="controls">
-    <span id="progress">0 / 0</span>
-    <div id="top-bar-right">
-      <button id="upvote-btn" title="Upvote (↑)">▲</button>
-      <button id="downvote-btn" title="Downvote (↓)">▼</button>
-      <button id="save-btn" title="Save to Reddit (S)">☆</button>
-      <button id="auto-advance-btn" title="Toggle auto-advance">⏱ Off</button>
-      <button id="popout-btn" title="Pop out to window">↗</button>
-      <button id="close-btn" title="Close slideshow">✕</button>
-    </div>
-  </div>
-
-  <!-- Navigation arrows -->
-  <button id="prev-btn" class="nav-arrow controls" title="Previous (←)">‹</button>
-  <button id="next-btn" class="nav-arrow controls" title="Next (→)">›</button>
-
-  <!-- Main content area — renderers populate this -->
+  <!-- Main content area — renderers populate this. Full-bleed: the console
+       floats over the scrim rather than the stage being inset for it. -->
   <div id="content-container"></div>
 
-  <!-- Post info -->
-  <div id="post-info" class="controls">
-    <div id="post-title"></div>
-    <div id="post-meta"></div>
-  </div>
+  <!-- Page-level scrim. Not a child of the media: parented to the stage it
+       would not cover console edges that extend past a portrait frame. -->
+  <div id="scrim" aria-hidden="true"></div>
 
-  <!-- Progress bar -->
-  <div id="progress-bar">
-    <div id="progress-bar-fill"></div>
+  <!-- One console, replacing the top bar, the two floating arrows, the post
+       caption and the progress hairline. -->
+  <div id="console" class="controls">
+    <div id="console-main">
+      <div id="titleblock">
+        <h1 id="post-title"></h1>
+        <p id="post-meta"></p>
+      </div>
+
+      <div id="actions" role="toolbar" aria-label="Post and playback controls">
+        <div id="step">
+          <button id="prev-btn" type="button" aria-label="Previous post" title="Previous (←)">‹</button>
+          <button id="next-btn" type="button" aria-label="Next post" title="Next (→)">›</button>
+        </div>
+
+        <div id="votepill">
+          <button id="upvote-btn" type="button" aria-pressed="false" aria-label="Upvote" title="Upvote (↑)">▲</button>
+          <span id="score" aria-hidden="true"></span>
+          <button id="downvote-btn" type="button" aria-pressed="false" aria-label="Downvote" title="Downvote (↓)">▼</button>
+        </div>
+
+        <button id="save-btn" class="labelled" type="button" aria-pressed="false" title="Save to Reddit (S)">
+          <span class="glyph" aria-hidden="true">☆</span><span class="text">Save</span>
+        </button>
+
+        <button id="open-btn" class="labelled" type="button" title="Open the post on Reddit (O)">
+          <span class="glyph" aria-hidden="true">↗</span><span class="text">Open post</span>
+        </button>
+
+        <span class="vrule" aria-hidden="true"></span>
+
+        <button id="auto-advance-btn" class="labelled" type="button" aria-pressed="false" title="Auto-advance off — press Space to start">⏱ Off</button>
+        <button id="popout-btn" type="button" aria-label="Open in its own window" title="Pop out to window">↗</button>
+        <button id="close-btn" type="button" aria-label="Close slideshow" title="Close slideshow (Esc)">✕</button>
+      </div>
+    </div>
+
+    <div id="console-rail">
+      <!-- Position is announced, so a screen reader hears the slide change. -->
+      <span id="progress" role="status" aria-live="polite" aria-atomic="true">0 / 0</span>
+      <div id="ticks" aria-hidden="true"></div>
+      <span id="rail-note" aria-hidden="true"></span>
+    </div>
   </div>
 
   <script src="settings.js"></script>

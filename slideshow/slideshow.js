@@ -8,15 +8,18 @@
   // --- DOM references ---
   const contentContainer = document.getElementById("content-container");
   const progress = document.getElementById("progress");
+  const ticks = document.getElementById("ticks");
+  const railNote = document.getElementById("rail-note");
   const postTitle = document.getElementById("post-title");
   const postMeta = document.getElementById("post-meta");
-  const progressBarFill = document.getElementById("progress-bar-fill");
+  const scoreEl = document.getElementById("score");
   const prevBtn = document.getElementById("prev-btn");
   const nextBtn = document.getElementById("next-btn");
   const closeBtn = document.getElementById("close-btn");
   const popoutBtn = document.getElementById("popout-btn");
   const autoAdvanceBtn = document.getElementById("auto-advance-btn");
   const saveBtn = document.getElementById("save-btn");
+  const openBtn = document.getElementById("open-btn");
   const upvoteBtn = document.getElementById("upvote-btn");
   const downvoteBtn = document.getElementById("downvote-btn");
 
@@ -32,6 +35,16 @@
   // (older) snapshot cannot overwrite it.
   let pendingPosts = null;
 
+  // Errors and empty states are the only thing on screen when they appear, so
+  // they get real type rather than 12px of #777 on black.
+  function showMessage(text) {
+    const div = document.createElement("div");
+    div.className = "slide-message";
+    div.textContent = text;
+    contentContainer.textContent = "";
+    contentContainer.appendChild(div);
+  }
+
   // --- Renderer map ---
   const renderers = {
     image: ImageRenderer,
@@ -44,11 +57,7 @@
     try {
       const state = await browser.runtime.sendMessage({ type: "getCurrentState" });
       if (state.error) {
-        const errDiv = document.createElement("div");
-        errDiv.style.cssText = "color:#777;font-size:14px;";
-        errDiv.textContent = state.error;
-        contentContainer.innerHTML = "";
-        contentContainer.appendChild(errDiv);
+        showMessage(state.error);
         return;
       }
       posts = state.posts;
@@ -64,22 +73,16 @@
       }
 
       if (posts.length === 0) {
-        const noPostsDiv = document.createElement("div");
-        noPostsDiv.style.cssText = "color:#777;font-size:14px;";
-        noPostsDiv.textContent = "No posts found";
-        contentContainer.innerHTML = "";
-        contentContainer.appendChild(noPostsDiv);
+        showMessage(
+          "No posts found on this page. Scroll the Reddit tab so some posts have loaded, then start the slideshow again."
+        );
         return;
       }
 
       renderCurrentPost();
       pullUntilResolved();
     } catch (e) {
-      const errDiv = document.createElement("div");
-      errDiv.style.cssText = "color:#777;font-size:14px;";
-      errDiv.textContent = "Error loading slideshow";
-      contentContainer.innerHTML = "";
-      contentContainer.appendChild(errDiv);
+      showMessage("Error loading slideshow");
     }
   }
 
@@ -171,12 +174,13 @@
           : null;
       cleanupCurrentRender = renderer.render(post, contentContainer, onEnded, onFail);
     } else {
-      const unsupportedDiv = document.createElement("div");
-      unsupportedDiv.style.cssText = "color:#777;font-size:14px;";
-      unsupportedDiv.textContent = `Unsupported content type: ${post.type}`;
-      contentContainer.innerHTML = "";
-      contentContainer.appendChild(unsupportedDiv);
+      showMessage(`Unsupported content type: ${post.type}`);
     }
+
+    // A video carries Firefox's own control bar along its bottom edge, which
+    // would otherwise sit underneath the console. Only videos pay the
+    // clearance; a still keeps the whole frame.
+    document.body.classList.toggle("media-video", post.type === "video");
 
     // Update UI
     updatePostInfo(post);
@@ -212,21 +216,28 @@
   // and roll back if Reddit refuses — waiting on a round trip to acknowledge a
   // save makes the slideshow feel broken.
 
+  // State lives in the accessible name as well as the colour. A CSS class and
+  // a swapped glyph told a sighted user everything and a screen-reader user
+  // nothing — "black star button" either way, pressed or not.
   function updateActionButtons() {
     const post = posts[currentIndex];
-    const known = post && post.redditId;
+    const known = !!(post && post.redditId);
 
     saveBtn.disabled = !known;
     upvoteBtn.disabled = !known;
     downvoteBtn.disabled = !known;
 
     const saved = !!(post && post.saved);
-    saveBtn.classList.toggle("active", saved);
-    saveBtn.textContent = saved ? "★" : "☆";
+    saveBtn.setAttribute("aria-pressed", String(saved));
+    saveBtn.querySelector(".glyph").textContent = saved ? "★" : "☆";
+    saveBtn.querySelector(".text").textContent = saved ? "Saved" : "Save";
     saveBtn.title = saved ? "Unsave from Reddit (S)" : "Save to Reddit (S)";
 
-    upvoteBtn.classList.toggle("active", !!(post && post.likes === true));
-    downvoteBtn.classList.toggle("active", !!(post && post.likes === false));
+    upvoteBtn.setAttribute("aria-pressed", String(!!(post && post.likes === true)));
+    downvoteBtn.setAttribute("aria-pressed", String(!!(post && post.likes === false)));
+
+    const url = post ? permalinkUrl(post) : "";
+    openBtn.disabled = !url;
   }
 
   function flagActionFailed(button, message) {
@@ -308,27 +319,85 @@
     }
   }
 
+  // Reddit fuzzes the displayed score, so this is a rounded number by the time
+  // it reaches us — presenting it to more precision than Reddit does would be
+  // inventing accuracy.
+  function formatScore(score) {
+    if (typeof score !== "number" || !score) return "";
+    return score >= 1000 ? `${(score / 1000).toFixed(1)}k` : String(score);
+  }
+
+  function formatAge(createdUtc) {
+    if (typeof createdUtc !== "number" || !createdUtc) return "";
+    const hours = (Date.now() / 1000 - createdUtc) / 3600;
+    if (hours < 1) return `${Math.max(1, Math.round(hours * 60))}m`;
+    if (hours < 24) return `${Math.round(hours)}h`;
+    const days = Math.round(hours / 24);
+    return days < 30 ? `${days}d` : `${Math.round(days / 30)}mo`;
+  }
+
   function updatePostInfo(post) {
     postTitle.textContent = post.title;
+    // Clamped to two lines, so the whole thing is kept on the hover.
+    postTitle.title = post.title || "";
+
+    scoreEl.textContent = formatScore(post.score);
+
+    postMeta.textContent = "";
+    if (post.flair) {
+      const flair = document.createElement("span");
+      flair.className = "flair";
+      flair.textContent = post.flair;
+      postMeta.appendChild(flair);
+    }
+
     const parts = [];
     if (post.subreddit) parts.push(`r/${post.subreddit}`);
-    if (post.score) {
-      const scoreFormatted = post.score >= 1000
-        ? `${(post.score / 1000).toFixed(1)}k`
-        : post.score;
-      parts.push(`${scoreFormatted} ↑`);
-    }
     if (post.author) parts.push(`u/${post.author}`);
-    postMeta.textContent = parts.join(" · ");
+    if (typeof post.numComments === "number") {
+      parts.push(`${post.numComments} ${post.numComments === 1 ? "comment" : "comments"}`);
+    }
+    const age = formatAge(post.createdUtc);
+    if (age) parts.push(age);
+    postMeta.appendChild(document.createTextNode(parts.join(" · ")));
+  }
+
+  // At most this many ticks, whatever the queue length. Past that each tick
+  // stands for a bucket of posts: still an honest position, just a coarser
+  // one. A tick per post would be a hairline nobody can read by post 300.
+  const TICK_MAX = 48;
+
+  function renderTicks() {
+    ticks.textContent = "";
+    const total = posts.length;
+    if (total < 2) return;
+
+    const count = Math.min(total, TICK_MAX);
+    const current = Math.min(count - 1, Math.floor((currentIndex / total) * count));
+    for (let i = 0; i < count; i++) {
+      const tick = document.createElement("i");
+      if (i === current) tick.className = "current";
+      else if (i < current) tick.className = "seen";
+      ticks.appendChild(tick);
+    }
   }
 
   function updateProgress() {
-    const atEnd = document.body.classList.contains("at-end");
-    progress.textContent = atEnd
-      ? `${currentIndex + 1} / ${posts.length} · end of queue`
-      : `${currentIndex + 1} / ${posts.length}`;
-    const pct = posts.length > 0 ? ((currentIndex + 1) / posts.length) * 100 : 0;
-    progressBarFill.style.width = `${pct}%`;
+    const total = posts.length;
+    // The denominator grows on every refill, so a percentage genuinely ran
+    // backwards (18/20 became 19/43 in one keypress) and read as a completion
+    // meter it could never fill. A trailing "+" says the same thing honestly.
+    progress.textContent = `${Math.min(currentIndex + 1, total)} / ${total}${exhausted ? "" : "+"}`;
+
+    railNote.textContent = document.body.classList.contains("at-end")
+      ? "end of queue"
+      : awaitingMore
+        ? "waiting for more posts"
+        : exhausted
+          ? ""
+          : "more arriving";
+
+    renderTicks();
   }
 
   function updateNavButtons() {
@@ -506,6 +575,29 @@
   document.addEventListener("keydown", resetIdleTimer);
   resetIdleTimer();
 
+  // --- Open the post on Reddit ---
+  // `permalink` has been scraped on both the new- and old-Reddit paths and
+  // carried through the whole pipeline since the beginning, and nothing has
+  // ever rendered it: there was no route from the slideshow back to the post
+  // or its comments.
+  function permalinkUrl(post) {
+    const link = (post && post.permalink) || "";
+    if (!link) return "";
+    if (/^https?:/.test(link)) return link;
+    return `https://www.reddit.com${link.startsWith("/") ? "" : "/"}${link}`;
+  }
+
+  async function openPost() {
+    const url = permalinkUrl(posts[currentIndex]);
+    if (!url) return;
+    const result = await browser.runtime
+      .sendMessage({ type: "openPost", url })
+      .catch(() => ({ error: "Could not reach the background script" }));
+    if (!result || result.error) {
+      flagActionFailed(openBtn, (result && result.error) || "Could not open the post");
+    }
+  }
+
   // --- Close / Pop-out ---
   async function closeSlideshow() {
     if (mode === "popout") {
@@ -527,6 +619,7 @@
   popoutBtn.addEventListener("click", popOut);
   autoAdvanceBtn.addEventListener("click", toggleAutoAdvance);
   saveBtn.addEventListener("click", toggleSave);
+  openBtn.addEventListener("click", openPost);
   upvoteBtn.addEventListener("click", () => vote(1));
   downvoteBtn.addEventListener("click", () => vote(-1));
 
@@ -583,6 +676,10 @@
       case "s":
       case "S":
         toggleSave();
+        break;
+      case "o":
+      case "O":
+        openPost();
         break;
     }
   });
