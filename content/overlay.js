@@ -152,6 +152,13 @@ function classifyPost(el) {
   return null;
 }
 
+// shreddit-post writes these as bare attributes (`nsfw=""`) as often as
+// `nsfw="true"`, so presence is what counts.
+function boolAttr(el, name) {
+  const value = el.getAttribute(name);
+  return value !== null && value !== "false" && value !== "0";
+}
+
 function scrapePosts() {
   const posts = [];
   const seen = new Set();
@@ -190,6 +197,13 @@ function scrapePosts() {
       subreddit: (el.getAttribute("subreddit-prefixed-name") || "").replace(/^r\//, ""),
       score: parseInt(el.getAttribute("score") || "0", 10),
       permalink: el.getAttribute("permalink") || "",
+      // Read here as well as from info.json, deliberately. The info.json fetch
+      // swallows its own failures and continues with an empty map, so relying
+      // on it alone would mean adult media renders unblurred at full screen in
+      // exactly the case the gate exists for. Either source saying "adult" is
+      // enough; both being silent must not be read as "safe".
+      nsfw: boolAttr(el, "nsfw"),
+      spoiler: boolAttr(el, "spoiler"),
       type: classified.type,
       mediaUrl: classified.mediaUrl,
       originalUrl: classified.originalUrl || el.getAttribute("content-href") || "",
@@ -249,6 +263,8 @@ function scrapePosts() {
           subreddit: el.getAttribute("data-subreddit") || "",
           score: parseInt(el.getAttribute("data-score") || "0", 10),
           permalink: (el.querySelector("a.comments") || {}).getAttribute("href") || "",
+          nsfw: el.classList.contains("over18") || el.getAttribute("data-nsfw") === "true",
+          spoiler: el.classList.contains("spoiler"),
           type,
           mediaUrl,
           originalUrl: dataUrl,
@@ -301,6 +317,18 @@ function galleryMediaUrls(data) {
     .filter(Boolean);
 }
 
+// A post's own JSON is the authority on whether it is adult or spoilered —
+// used for crossposts and galleries, where the DOM we scraped belongs to the
+// wrapper rather than to the media finally shown. Flags are only ever added,
+// never cleared: whichever source says "adult" wins.
+function withJsonFlags(post, data) {
+  return {
+    ...post,
+    nsfw: post.nsfw === true || (data && data.over_18 === true),
+    spoiler: post.spoiler === true || (data && data.spoiler === true),
+  };
+}
+
 // One post per image: a slideshow shows one thing at a time, so a gallery that
 // stayed a single post would show only its first image.
 function expandGallery(post, urls) {
@@ -321,14 +349,17 @@ async function resolveCrosspost(post) {
     const original = await fetchPostJson(post.crosspostHref);
     if (!original) return null;
 
+    // The crosspost wrapper can be tame while the post it points at is not.
+    const flagged = withJsonFlags(post, original);
+
     // The original may itself be a gallery.
     const gallery = galleryMediaUrls(original);
-    if (gallery.length) return expandGallery(post, gallery);
+    if (gallery.length) return expandGallery(flagged, gallery);
 
     const classified = classifyUrl(original.url || "");
     if (!classified) return null;
 
-    const { crosspostHref, ...rest } = post;
+    const { crosspostHref, ...rest } = flagged;
     return { ...rest, ...classified };
   } catch (e) {
     // Unreachable or not JSON — the post is dropped rather than shown broken
@@ -344,7 +375,7 @@ async function resolveGallery(post) {
     const urls = galleryMediaUrls(data);
     if (!urls.length) return null;
 
-    return expandGallery(post, urls);
+    return expandGallery(withJsonFlags(post, data), urls);
   } catch (e) {
     return null;
   }
@@ -426,10 +457,44 @@ function handleVotePost(message) {
   return redditAction("/api/vote", { id: message.id, dir: String(message.dir) });
 }
 
-// Whether the viewer has already saved or voted on these posts. One request
+// What Reddit knows about these posts that the DOM does not say. One request
 // covers a whole batch — /api/info.json takes up to 100 ids — so the slideshow
 // can show the real state instead of guessing.
+//
+// This response was already being fetched and all but two fields thrown away.
+// The rest cost nothing extra: no additional request, no additional
+// permission. They are what lets the slideshow gate adult content, show
+// comment counts and flair, and — later — render text posts at all.
 const INFO_BATCH_SIZE = 100;
+
+// preview.redd.it URLs are signed and expire, so a thumbnail picked up at the
+// start of a long session can be dead by the time a filmstrip asks for it.
+// The smallest rendition is picked because that is all a thumbnail needs.
+function previewThumbnail(d) {
+  const images = d && d.preview && d.preview.images;
+  const first = Array.isArray(images) && images[0];
+  const resolutions = first && first.resolutions;
+  if (Array.isArray(resolutions) && resolutions.length) {
+    const smallest = resolutions.reduce((a, b) => ((a.width || 0) <= (b.width || 0) ? a : b));
+    if (smallest && smallest.url) return smallest.url;
+  }
+  // `thumbnail` is sometimes a placeholder word rather than a URL.
+  return /^https?:/.test(d.thumbnail || "") ? d.thumbnail : "";
+}
+
+function infoFields(d) {
+  return {
+    saved: d.saved === true,
+    likes: d.likes === undefined ? null : d.likes,
+    nsfw: d.over_18 === true,
+    spoiler: d.spoiler === true,
+    selftext: typeof d.selftext === "string" ? d.selftext : "",
+    numComments: typeof d.num_comments === "number" ? d.num_comments : null,
+    createdUtc: typeof d.created_utc === "number" ? d.created_utc : null,
+    flair: d.link_flair_text || "",
+    thumbnail: previewThumbnail(d),
+  };
+}
 
 async function attachUserState(posts) {
   const ids = [...new Set(posts.map((p) => p.redditId).filter((id) => /^t3_\w+$/.test(id)))];
@@ -448,7 +513,7 @@ async function attachUserState(posts) {
       const children = (data && data.data && data.data.children) || [];
       children.forEach((child) => {
         const d = child.data || {};
-        state.set(d.name, { saved: d.saved === true, likes: d.likes === undefined ? null : d.likes });
+        state.set(d.name, infoFields(d));
       });
     } catch (e) {
       // Not signed in, or Reddit is unhappy — the buttons still work, they
@@ -458,7 +523,11 @@ async function attachUserState(posts) {
 
   return posts.map((post) => {
     const found = state.get(post.redditId);
-    return found ? { ...post, ...found } : post;
+    // This fetch fails silently on a signed-out or rate-limited viewer, so a
+    // post that got no answer keeps whatever the DOM scrape already said about
+    // it — in particular its nsfw/spoiler flags, which must not be downgraded
+    // to "safe" just because the request died.
+    return found ? { ...post, ...found, nsfw: post.nsfw || found.nsfw, spoiler: post.spoiler || found.spoiler } : post;
   });
 }
 
