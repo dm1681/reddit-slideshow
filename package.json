@@ -1,6 +1,6 @@
 {
   "name": "reddit-slideshow",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Firefox extension that views Reddit posts as a fullscreen slideshow",
   "private": true,
   "directories": {
