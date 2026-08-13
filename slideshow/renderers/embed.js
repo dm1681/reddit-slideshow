@@ -1,5 +1,16 @@
 // Reddit Slideshow — embed renderer (iframes for third-party content)
 
+// A cross-origin player cannot be asked when it finished, so auto-advance
+// falls back to a blind timer. The comment here used to claim 30s while the
+// code said 15s; the viewer can now set it, and this is the default.
+const EMBED_DURATION_MS = 15000;
+
+function embedDwellMs() {
+  if (typeof SlideshowSettings === "undefined") return EMBED_DURATION_MS;
+  const value = SlideshowSettings.get("embedDwellMs");
+  return typeof value === "number" ? value : EMBED_DURATION_MS;
+}
+
 const EmbedRenderer = {
   render(post, container, onEnded) {
     container.innerHTML = "";
@@ -26,13 +37,14 @@ const EmbedRenderer = {
 
     function startFallbackTimer() {
       if (!onEnded || timer) return;
-      timer = setTimeout(advance, 15000);
+      timer = setTimeout(advance, embedDwellMs());
     }
 
     iframe.addEventListener("load", () => {
       spinner.remove();
       iframe.style.opacity = "1";
-      // Start the fallback timer AFTER iframe loads, so the full 15s is viewing time
+      // Start the fallback timer AFTER the iframe loads, so the whole dwell is
+      // viewing time rather than loading time.
       startFallbackTimer();
     });
 

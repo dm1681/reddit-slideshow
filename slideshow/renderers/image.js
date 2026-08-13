@@ -5,6 +5,16 @@
 const IMAGE_DURATION_MS = 5000;
 const IMAGE_ERROR_ADVANCE_MS = 2000;
 
+// The viewer's own dwell time, when there is one. Read per render rather than
+// captured once, so changing it in the Reel panel takes effect on the next
+// slide instead of the next session. The renderers are also loaded standalone
+// by the auto-advance tests, without settings.js — hence the fallback.
+function imageDwellMs() {
+  if (typeof SlideshowSettings === "undefined") return IMAGE_DURATION_MS;
+  const value = SlideshowSettings.get("imageDwellMs");
+  return typeof value === "number" ? value : IMAGE_DURATION_MS;
+}
+
 const ImageRenderer = {
   render(post, container, onEnded) {
     container.innerHTML = "";
@@ -40,7 +50,7 @@ const ImageRenderer = {
       img.classList.add("loaded");
       // Timed from the load, so every still gets the same time on screen no
       // matter how long it took to arrive.
-      advanceAfter(IMAGE_DURATION_MS);
+      advanceAfter(imageDwellMs());
     });
 
     img.addEventListener("error", () => {
