@@ -23,6 +23,7 @@
   const upvoteBtn = document.getElementById("upvote-btn");
   const downvoteBtn = document.getElementById("downvote-btn");
   const reelBtn = document.getElementById("reel-btn");
+  const fullscreenBtn = document.getElementById("fullscreen-btn");
 
   // The Reel is optional: the controller works without it, and the standalone
   // harnesses do not load it.
@@ -736,6 +737,55 @@
     }
   }
 
+  // --- Fullscreen ---
+  //
+  // The DOM Fullscreen API in both modes rather than browser.windows.update
+  // for the pop-out: one code path, and `fullscreenchange` means the button
+  // state is read from the browser rather than tracked in parallel with it.
+  // That matters because fullscreen can end without this code being involved —
+  // Escape is handled by the browser and the keydown does not reach the page.
+  //
+  // documentElement, not #content-container: fullscreening the stage alone
+  // would take the console and the Reel panel off screen with it.
+  //
+  // In overlay mode this only works because the injected iframe is granted
+  // `allow="…; fullscreen"`; a frame cannot enter fullscreen unless every
+  // ancestor delegates the permission.
+  function isFullscreen() {
+    return !!document.fullscreenElement;
+  }
+
+  async function toggleFullscreen() {
+    try {
+      if (isFullscreen()) {
+        await document.exitFullscreen();
+      } else {
+        // Requires transient user activation, so this can only ever be reached
+        // from a real keypress or click — never restored on load.
+        await document.documentElement.requestFullscreen();
+      }
+    } catch (e) {
+      // Refused (no activation, or the permission was not delegated). The
+      // slideshow is perfectly usable windowed, so say so and carry on.
+      flagActionFailed(fullscreenBtn, "Fullscreen was refused by the browser");
+    }
+  }
+
+  function syncFullscreenButton() {
+    // Reads the browser's state, not ours: the native video control bar has
+    // its own fullscreen button, and Escape exits without telling us.
+    const on = isFullscreen();
+    fullscreenBtn.setAttribute("aria-pressed", String(on));
+    fullscreenBtn.textContent = on ? "⤢" : "⛶";
+    fullscreenBtn.title = on ? "Leave fullscreen (F)" : "Fullscreen (F)";
+    document.body.classList.toggle("fullscreen", on);
+    // Entering or leaving is a deliberate act; show the chrome so the viewer
+    // can see what changed before it fades again.
+    resetIdleTimer();
+  }
+
+  document.addEventListener("fullscreenchange", syncFullscreenButton);
+
   // --- Close / Pop-out ---
   async function closeSlideshow() {
     if (mode === "popout") {
@@ -758,6 +808,7 @@
   autoAdvanceBtn.addEventListener("click", toggleAutoAdvance);
   saveBtn.addEventListener("click", toggleSave);
   openBtn.addEventListener("click", openPost);
+  fullscreenBtn.addEventListener("click", toggleFullscreen);
   upvoteBtn.addEventListener("click", () => vote(1));
   downvoteBtn.addEventListener("click", () => vote(-1));
 
@@ -790,7 +841,11 @@
       // Escape dismisses the panel first. Closing the whole slideshow because
       // the viewer wanted to put a settings panel away would be a rude
       // surprise.
+      // Escape unwinds one layer at a time. The browser usually handles the
+      // fullscreen exit itself and never delivers this keydown, but when it
+      // does reach us, leaving fullscreen must not also end the session.
       if (reelOpen()) Reel.close();
+      else if (isFullscreen()) document.exitFullscreen().catch(() => {});
       else closeSlideshow();
       return;
     }
@@ -833,6 +888,10 @@
       case "R":
         revealCurrent();
         break;
+      case "f":
+      case "F":
+        toggleFullscreen();
+        break;
       case "?":
         Reel.toggle();
         break;
@@ -868,6 +927,7 @@
   }
 
   updateAutoAdvanceButton();
+  syncFullscreenButton();
   if (typeof Reel !== "undefined") Reel.init({ opener: reelBtn });
   claimFocus();
   init();

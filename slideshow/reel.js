@@ -16,6 +16,7 @@ const Reel = (function () {
     [["S"], "Save or unsave"],
     [["O"], "Open the post on Reddit"],
     [["R"], "Reveal a hidden post"],
+    [["F"], "Fullscreen"],
     [["?"], "This panel"],
     [["Esc"], "Close the slideshow"],
   ];
