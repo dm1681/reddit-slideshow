@@ -593,7 +593,13 @@ function createOverlay() {
     margin: 0;
     padding: 0;
   `;
-  iframe.allow = "autoplay";
+  // Fullscreen is a delegated permission: a frame can only enter fullscreen if
+  // every ancestor grants it. Without this the slideshow cannot go fullscreen
+  // at all in overlay mode — and neither can anything inside it, so an
+  // embedded player's own fullscreen button silently does nothing even though
+  // embed.js asks for the permission it never receives.
+  iframe.allow = "autoplay; fullscreen";
+  iframe.setAttribute("allowfullscreen", "");
 
   overlayElement.appendChild(iframe);
   document.body.appendChild(overlayElement);
