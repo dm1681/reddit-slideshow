@@ -150,6 +150,9 @@
     const post = posts[currentIndex];
     if (!post) return;
 
+    // Moving off the last post leaves the end-of-queue state behind.
+    document.body.classList.remove("at-end");
+
     // Cleanup previous render
     if (cleanupCurrentRender) {
       cleanupCurrentRender();
@@ -297,7 +300,10 @@
   }
 
   function updateProgress() {
-    progress.textContent = `${currentIndex + 1} / ${posts.length}`;
+    const atEnd = document.body.classList.contains("at-end");
+    progress.textContent = atEnd
+      ? `${currentIndex + 1} / ${posts.length} · end of queue`
+      : `${currentIndex + 1} / ${posts.length}`;
     const pct = posts.length > 0 ? ((currentIndex + 1) / posts.length) * 100 : 0;
     progressBarFill.style.width = `${pct}%`;
   }
@@ -337,6 +343,8 @@
         // Non-critical — continue with what we have
       } finally {
         fetchInProgress = false;
+        // Auto-advance may be parked at the boundary waiting for exactly this.
+        resumeIfWaiting();
       }
     }
   }
@@ -362,28 +370,93 @@
   // Embeds advance after a 30s timer (can't detect end).
   // Toggling auto-advance re-renders the current post to attach/detach the onEnded callback.
 
+  // Running off the end of the queue used to stop auto-advance for good, in
+  // silence: on the last post with more still coming, autoAdvanceNext did
+  // nothing at all — it neither advanced, stopped, nor retried — while the
+  // button went on claiming "Auto" over a slideshow that had quietly halted.
+  let awaitingMore = false;
+  let awaitingTimer = null;
+  // The refill scrolls the user's real browsing tab, so a single miss means
+  // "not yet", not "never".
+  const AWAIT_MORE_RETRY_MS = 1500;
+
+  function updateAutoAdvanceButton() {
+    const label = !autoAdvanceOn ? "⏱ Off" : awaitingMore ? "⏱ Waiting…" : "⏱ Auto";
+    autoAdvanceBtn.textContent = label;
+    autoAdvanceBtn.setAttribute("aria-pressed", String(autoAdvanceOn));
+    autoAdvanceBtn.title = awaitingMore
+      ? "Waiting for more posts to load"
+      : autoAdvanceOn
+        ? "Auto-advance on — press Space to pause"
+        : "Auto-advance off — press Space to start";
+  }
+
+  function stopAwaiting() {
+    awaitingMore = false;
+    clearTimeout(awaitingTimer);
+    awaitingTimer = null;
+  }
+
+  function waitForMore() {
+    clearTimeout(awaitingTimer);
+    checkPreemptiveFetch();
+    awaitingTimer = setTimeout(() => {
+      if (autoAdvanceOn && awaitingMore) waitForMore();
+    }, AWAIT_MORE_RETRY_MS);
+  }
+
+  // Called by checkPreemptiveFetch once a refill lands, so a hold at the
+  // boundary resumes by itself instead of needing a keypress.
+  function resumeIfWaiting() {
+    if (!awaitingMore) return;
+    if (currentIndex < posts.length - 1 || exhausted) {
+      stopAwaiting();
+      autoAdvanceNext();
+    }
+  }
+
   function autoAdvanceNext() {
     if (!autoAdvanceOn) return;
+
     if (currentIndex < posts.length - 1) {
+      stopAwaiting();
       currentIndex++;
       renderCurrentPost();
-    } else if (exhausted) {
-      stopAutoAdvance();
+      return;
     }
+
+    if (exhausted) {
+      // The queue really is over. Stop without re-rendering: re-rendering
+      // restarts the current post's media, so the end of the slideshow used to
+      // announce itself by replaying the final video from the beginning.
+      stopAutoAdvance({ rerender: false });
+      document.body.classList.add("at-end");
+      updateProgress();
+      return;
+    }
+
+    // More posts are still on their way. Hold here and pick up where we left
+    // off rather than stalling for the rest of the session.
+    awaitingMore = true;
+    updateAutoAdvanceButton();
+    waitForMore();
   }
 
   function startAutoAdvance() {
     autoAdvanceOn = true;
-    autoAdvanceBtn.textContent = "⏱ Auto";
+    stopAwaiting();
+    document.body.classList.remove("at-end");
+    updateAutoAdvanceButton();
     // Re-render current post to attach onEnded callback
     renderCurrentPost();
   }
 
-  function stopAutoAdvance() {
+  function stopAutoAdvance({ rerender = true } = {}) {
     autoAdvanceOn = false;
-    autoAdvanceBtn.textContent = "⏱ Off";
+    stopAwaiting();
+    updateAutoAdvanceButton();
     // Re-render to remove onEnded callback (videos will loop again)
-    renderCurrentPost();
+    if (rerender) renderCurrentPost();
   }
 
   function toggleAutoAdvance() {
@@ -497,5 +570,6 @@
   }
 
   // --- Initialize ---
+  updateAutoAdvanceButton();
   init();
 })();
