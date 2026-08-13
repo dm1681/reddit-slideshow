@@ -633,6 +633,8 @@ function removeOverlay() {
 
 browser.runtime.onMessage.addListener((message) => {
   switch (message.type) {
+    case "scanOnly":
+      return handleScanOnly();
     case "scrapeAndStart":
       return handleScrapeAndStart();
     case "loadMore":
@@ -648,6 +650,32 @@ browser.runtime.onMessage.addListener((message) => {
       return false;
   }
 });
+
+// What the popup can promise before anything is started. scrapePosts() is a
+// synchronous DOM read with no fetches, so this is cheap enough to run every
+// time the popup opens — and a Firefox popup is destroyed the moment it loses
+// focus, so anything expensive started here would be thrown away anyway.
+//
+// The count is approximate and labelled as such: resolvePendingPosts later
+// expands one gallery into N posts and drops crossposts it cannot resolve.
+// A precise-looking figure the pipeline then contradicts would be worse than
+// no figure at all.
+function handleScanOnly() {
+  const posts = scrapePosts();
+  const subreddit = (location.pathname.match(/^\/r\/([a-zA-Z0-9_]+)/) || [])[1] || "";
+  const counts = posts.reduce((acc, post) => {
+    acc[post.type] = (acc[post.type] || 0) + 1;
+    return acc;
+  }, {});
+  return Promise.resolve({
+    count: posts.length,
+    counts,
+    subreddit,
+    // The scrape only sees what the page has rendered, so an untouched feed
+    // holds a couple of screens' worth however far the subreddit goes.
+    approximate: true,
+  });
+}
 
 async function handleScrapeAndStart() {
   const posts = await attachUserState(await resolvePendingPosts(scrapePosts()));

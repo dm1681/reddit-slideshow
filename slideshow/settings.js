@@ -56,6 +56,16 @@ const SlideshowSettings = (function () {
   const values = load();
   const listeners = new Set();
 
+  function notify(key, value) {
+    listeners.forEach((fn) => {
+      try {
+        fn(key, value);
+      } catch (e) {
+        // A misbehaving listener must not stop the others being told.
+      }
+    });
+  }
+
   function persist() {
     try {
       localStorage.setItem(KEY, JSON.stringify(values));
@@ -80,13 +90,7 @@ const SlideshowSettings = (function () {
       if (values[key] === next) return;
       values[key] = next;
       persist();
-      listeners.forEach((fn) => {
-        try {
-          fn(key, next);
-        } catch (e) {
-          // A misbehaving listener must not stop the others being told.
-        }
-      });
+      notify(key, next);
     },
 
     // Called with (key, value) whenever a setting changes, so the console and
@@ -96,9 +100,35 @@ const SlideshowSettings = (function () {
       return () => listeners.delete(fn);
     },
 
+    // Another document on this origin wrote to storage. Pick up whatever
+    // changed and tell this document's listeners about it.
+    reloadFromStorage() {
+      const next = load();
+      for (const key of Object.keys(DEFAULTS)) {
+        if (values[key] === next[key]) continue;
+        values[key] = next[key];
+        notify(key, next[key]);
+      }
+    },
+
     DEFAULTS,
   };
 })();
+
+// The popup and the slideshow are separate documents that happen to share the
+// moz-extension://<id> origin, so each holds its own in-memory copy and an
+// in-process listener never reaches the other one. The storage event does: it
+// fires on every same-origin document EXCEPT the one that made the change,
+// which is exactly the notification wanted here.
+//
+// Without this, turning the adult mask off in the popup would leave a
+// slideshow that is already open still masking until it was reopened.
+if (typeof window !== "undefined") {
+  window.addEventListener("storage", (event) => {
+    if (event.key && event.key !== "reddit-slideshow.settings") return;
+    SlideshowSettings.reloadFromStorage();
+  });
+}
 
 // The renderers are loaded standalone by test/test-auto-advance.js, without
 // this file. They fall back to their own constants when the global is absent,

@@ -127,6 +127,8 @@ browser.runtime.onMessage.addListener((message, sender) => {
   switch (message.type) {
     case "startSlideshow":
       return handleStartSlideshow();
+    case "scanOnly":
+      return handleScanOnly();
     case "getCurrentState":
       return handleGetCurrentState();
     case "getPosts":
@@ -199,6 +201,20 @@ async function doStartSlideshow() {
     console.error("[reddit-slideshow] scrapeAndStart error:", e);
     session = null;
     return { error: "Could not start slideshow. Make sure you're on a Reddit page." };
+  }
+}
+
+// A read-only look at the active tab for the popup, so it can say what will
+// happen before the viewer commits to it. Starts nothing and touches no
+// session state.
+async function handleScanOnly() {
+  const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+  if (tabs.length === 0) return { error: "No active tab" };
+  try {
+    return await browser.tabs.sendMessage(tabs[0].id, { type: "scanOnly" });
+  } catch (e) {
+    // No content script here — not a Reddit page, or one that has not loaded.
+    return { error: "Not a Reddit page" };
   }
 }
 
