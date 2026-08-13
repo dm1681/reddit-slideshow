@@ -17,6 +17,7 @@ const VIDEO_RENDERER = fs.readFileSync(path.join(__dirname, "..", "slideshow", "
 const EMBED_RENDERER = fs.readFileSync(path.join(__dirname, "..", "slideshow", "renderers", "embed.js"), "utf8");
 const SLIDESHOW_HTML = fs.readFileSync(path.join(__dirname, "..", "slideshow", "slideshow.html"), "utf8");
 const SLIDESHOW_CSS = fs.readFileSync(path.join(__dirname, "..", "slideshow", "slideshow.css"), "utf8");
+const { slideshowPage: buildSlideshowPage } = require("./slideshow-page");
 
 function startServer() {
   return new Promise((resolve) => {
@@ -25,33 +26,11 @@ function startServer() {
         res.writeHead(200, { "Content-Type": "text/html" });
         res.end(fs.readFileSync(MOCK_PAGE, "utf8"));
       } else if (req.url === "/slideshow") {
-        // Serve a self-contained slideshow page for testing
-        const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8">
-<style>${SLIDESHOW_CSS}</style>
-</head><body>
-<div id="top-bar" class="controls">
-  <span id="progress">0 / 0</span>
-  <div id="top-bar-right">
-    <button id="upvote-btn"></button>
-    <button id="downvote-btn"></button>
-    <button id="save-btn"></button>
-    <button id="auto-advance-btn" title="Toggle auto-advance">⏱ Off</button>
-    <button id="popout-btn" title="Pop out to window">↗</button>
-    <button id="close-btn" title="Close slideshow">✕</button>
-  </div>
-</div>
-<button id="prev-btn" class="nav-arrow controls" title="Previous">‹</button>
-<button id="next-btn" class="nav-arrow controls" title="Next">›</button>
-<div id="content-container"></div>
-<div id="post-info" class="controls">
-  <div id="post-title"></div>
-  <div id="post-meta"></div>
-</div>
-<div id="progress-bar"><div id="progress-bar-fill"></div></div>
-</body></html>`;
+        // The real markup and the real stylesheet, so this is as close to the
+        // shipped page as a test server gets. Only the scripts are left out —
+        // they are injected after the WebExtension globals are stubbed.
         res.writeHead(200, { "Content-Type": "text/html" });
-        res.end(html);
+        res.end(buildSlideshowPage({ css: SLIDESHOW_CSS }));
       } else {
         res.writeHead(404);
         res.end("Not found");
@@ -157,7 +136,6 @@ async function main() {
     const postTitle = document.getElementById("post-title");
     const postMeta = document.getElementById("post-meta");
     const progress = document.getElementById("progress");
-    const progressBarFill = document.getElementById("progress-bar-fill");
 
     const posts = state.posts;
     let currentIndex = state.currentIndex;
@@ -187,9 +165,9 @@ async function main() {
     if (post.author) parts.push(`u/${post.author}`);
     postMeta.textContent = parts.join(" · ");
 
-    progress.textContent = `${currentIndex + 1} / ${posts.length}`;
-    const pct = ((currentIndex + 1) / posts.length) * 100;
-    progressBarFill.style.width = `${pct}%`;
+    // Matches updateProgress: a trailing "+" while the queue can still grow,
+    // rather than a percentage of a denominator that keeps moving.
+    progress.textContent = `${currentIndex + 1} / ${posts.length}${state.exhausted ? "" : "+"}`;
 
     return {
       hasContent: contentContainer.children.length > 0,
@@ -211,7 +189,9 @@ async function main() {
   assert(renderResult.title === "Beautiful sunset", "Post title rendered");
   assert(renderResult.meta.includes("r/pics"), "Post meta includes subreddit");
   assert(renderResult.meta.includes("u/photographer42"), "Post meta includes author");
-  assert(renderResult.progress === "1 / 11", `Progress shows 1 / 11 (got ${renderResult.progress})`);
+  // "+" because the session is not exhausted: the queue can still grow, and
+  // saying "1 / 11" flat would promise a total the refill will contradict.
+  assert(renderResult.progress === "1 / 11+", `Progress shows 1 / 11+ (got ${renderResult.progress})`);
 
   // ================================================================
   // TEST 2: Navigation simulation
