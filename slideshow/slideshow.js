@@ -434,7 +434,37 @@
   upvoteBtn.addEventListener("click", () => vote(1));
   downvoteBtn.addEventListener("click", () => vote(-1));
 
+  // The shortcuts are a bare `switch (e.key)`, which claims far more than it
+  // means to. Ctrl+S saved to Reddit *and* opened the browser's Save dialog;
+  // Space on a focused button fired the button's own activation as well as
+  // toggleAutoAdvance, for a net no-op that read as a dead key; and holding an
+  // arrow tore down and rebuilt a media element on every repeat.
+  //
+  // Only Escape survives these guards, because Escape is how you leave.
+  function shouldIgnoreKey(e) {
+    // Anything with a modifier belongs to the browser or the OS, not to us.
+    if (e.ctrlKey || e.metaKey || e.altKey) return true;
+    // Key repeat: one press, one slide.
+    if (e.repeat) return true;
+
+    const target = e.target;
+    if (!target || typeof target.closest !== "function") return false;
+    // A focused control owns Space and the arrows — that is how buttons,
+    // sliders and the like are operated. Typing owns everything.
+    if (target.closest("input, textarea, select, [contenteditable=\"true\"]")) return true;
+    if (target.closest("button, [role=\"button\"], [role=\"switch\"], [role=\"radio\"]")) {
+      return e.key === " " || e.key === "Enter" || e.key.startsWith("Arrow");
+    }
+    return false;
+  }
+
   document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      closeSlideshow();
+      return;
+    }
+    if (shouldIgnoreKey(e)) return;
+
     switch (e.key) {
       case "ArrowLeft":
         goPrev();
@@ -457,9 +487,6 @@
       case "s":
       case "S":
         toggleSave();
-        break;
-      case "Escape":
-        closeSlideshow();
         break;
     }
   });
