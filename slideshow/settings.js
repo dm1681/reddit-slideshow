@@ -22,9 +22,13 @@ const SlideshowSettings = (function () {
     // On by default because the slideshow removes the click-through Reddit
     // itself puts in front of this content.
     maskNsfw: true,
+    // How the incoming post enters the stage. Each value names a keyframe set
+    // in slideshow.css; "none" repaints in place.
+    transition: "cube",
   };
 
   const NUMERIC_RANGE = { imageDwellMs: [1000, 60000], embedDwellMs: [3000, 120000] };
+  const STRING_CHOICES = { transition: ["cube", "slide", "fade", "none"] };
 
   function coerce(key, value) {
     const fallback = DEFAULTS[key];
@@ -33,6 +37,9 @@ const SlideshowSettings = (function () {
       if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
       const [min, max] = NUMERIC_RANGE[key] || [-Infinity, Infinity];
       return Math.min(max, Math.max(min, value));
+    }
+    if (typeof fallback === "string") {
+      return (STRING_CHOICES[key] || []).includes(value) ? value : fallback;
     }
     return fallback;
   }

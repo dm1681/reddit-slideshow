@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<!-- Hypothesis mockup for the stage transition system (viz-driven-dev).
+
+     States the expected effect before implementation: when the slide index
+     moves, the incoming stage enters with a direction-aware animation —
+     "cube" is a 3D carousel turn (the next face swinging in around a vertical
+     axis), "slide" a flat push, "fade" a plain dissolve. The keyframes below
+     are the ones slideshow.css ships; if the two drift, trust slideshow.css.
+
+     Open directly, or append ?auto=1 to run the demo sequence once. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Stage transitions — hypothesis</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #0a0a0a;
+      color: #ededed;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+      /* ship: perspective on the body so the fixed stage can rotate in 3D */
+      perspective: clamp(900px, 90vw, 1600px);
+    }
+
+    #content-container {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      /* carousel mode: inset so the dim neighbours have the edges */
+      padding: clamp(12px, 2vh, 24px) calc(clamp(90px, 13vw, 220px) + clamp(8px, 1.5vw, 24px) * 2);
+    }
+
+    /* dim, angled neighbours — the previous and next posts */
+    .peek {
+      position: fixed;
+      top: 50%;
+      width: clamp(90px, 13vw, 220px);
+      height: min(52vh, 420px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0.4;
+      filter: brightness(0.6) saturate(0.75);
+    }
+    #peek-prev { left: clamp(8px, 1.5vw, 24px); transform: translateY(-50%) rotateY(38deg); }
+    #peek-next { right: clamp(8px, 1.5vw, 24px); transform: translateY(-50%) rotateY(-38deg); }
+    .peek img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      border-radius: 10px;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+    }
+
+    #content-container img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+
+    /* ============ the CSS under test (copied into slideshow.css) ============ */
+
+    .fx-cube.fx-next  { animation: stage-cube-next  480ms cubic-bezier(0.22, 1, 0.36, 1); }
+    .fx-cube.fx-prev  { animation: stage-cube-prev  480ms cubic-bezier(0.22, 1, 0.36, 1); }
+    .fx-slide.fx-next { animation: stage-slide-next 360ms cubic-bezier(0.22, 1, 0.36, 1); }
+    .fx-slide.fx-prev { animation: stage-slide-prev 360ms cubic-bezier(0.22, 1, 0.36, 1); }
+    .fx-fade.fx-next,
+    .fx-fade.fx-prev  { animation: stage-fade 300ms ease; }
+
+    @keyframes stage-cube-next {
+      from { transform: translateX(42%) rotateY(-38deg) scale(0.9); opacity: 0; }
+      55%  { opacity: 1; }
+      to   { transform: translateX(0) rotateY(0) scale(1); opacity: 1; }
+    }
+
+    @keyframes stage-cube-prev {
+      from { transform: translateX(-42%) rotateY(38deg) scale(0.9); opacity: 0; }
+      55%  { opacity: 1; }
+      to   { transform: translateX(0) rotateY(0) scale(1); opacity: 1; }
+    }
+
+    @keyframes stage-slide-next {
+      from { transform: translateX(7%); opacity: 0; }
+      to   { transform: none; opacity: 1; }
+    }
+
+    @keyframes stage-slide-prev {
+      from { transform: translateX(-7%); opacity: 0; }
+      to   { transform: none; opacity: 1; }
+    }
+
+    @keyframes stage-fade {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+
+    /* ======================================================================= */
+
+    #label {
+      position: fixed;
+      top: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 100;
+      font-size: 13px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #9a9a9a;
+      background: rgba(18, 18, 20, 0.74);
+      border: 1px solid rgba(255, 255, 255, 0.11);
+      border-radius: 100px;
+      padding: 6px 14px;
+    }
+
+    #buttons {
+      position: fixed;
+      bottom: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 100;
+      display: flex;
+      gap: 6px;
+    }
+
+    #buttons button {
+      font: inherit;
+      font-size: 13px;
+      color: #ededed;
+      background: rgba(255, 255, 255, 0.07);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 7px;
+      padding: 6px 10px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div id="peek-prev" class="peek"><img src="placeholder.svg" alt=""></div>
+  <div id="peek-next" class="peek"><img src="photo-portrait.svg" alt=""></div>
+  <div id="content-container"><img src="photo-landscape.svg" alt=""></div>
+  <div id="label">stage transitions</div>
+  <div id="buttons">
+    <button data-fx="cube" data-dir="prev">‹ cube</button>
+    <button data-fx="cube" data-dir="next">cube ›</button>
+    <button data-fx="slide" data-dir="next">slide ›</button>
+    <button data-fx="fade" data-dir="next">fade</button>
+  </div>
+
+  <script>
+    const stage = document.getElementById("content-container");
+    const label = document.getElementById("label");
+    const img = stage.querySelector("img");
+    const FRAMES = ["photo-landscape.svg", "photo-portrait.svg", "placeholder.svg"];
+    let frame = 0;
+
+    // Mirrors what slideshow.js will do on goNext/goPrev: swap the content,
+    // then run one direction-aware entrance animation on the stage.
+    const peekPrevImg = document.querySelector("#peek-prev img");
+    const peekNextImg = document.querySelector("#peek-next img");
+
+    function transition(fx, dir) {
+      frame = (frame + (dir === "prev" ? FRAMES.length - 1 : 1)) % FRAMES.length;
+      img.src = FRAMES[frame];
+      peekPrevImg.src = FRAMES[(frame + FRAMES.length - 1) % FRAMES.length];
+      peekNextImg.src = FRAMES[(frame + 1) % FRAMES.length];
+      label.textContent = `${fx} · ${dir}`;
+      stage.classList.remove("fx-next", "fx-prev", "fx-cube", "fx-slide", "fx-fade");
+      void stage.offsetWidth; // restart when a turn interrupts a turn
+      stage.classList.add("fx-" + fx, "fx-" + dir);
+    }
+
+    stage.addEventListener("animationend", (e) => {
+      if (e.target !== stage) return;
+      stage.classList.remove("fx-next", "fx-prev", "fx-cube", "fx-slide", "fx-fade");
+    });
+
+    for (const btn of document.querySelectorAll("#buttons button")) {
+      btn.addEventListener("click", () => transition(btn.dataset.fx, btn.dataset.dir));
+    }
+
+    // ?auto=1: run the whole sequence once, spaced out, for video capture.
+    if (new URLSearchParams(location.search).get("auto")) {
+      const SEQUENCE = [
+        ["cube", "next"], ["cube", "next"], ["cube", "prev"],
+        ["slide", "next"], ["slide", "prev"], ["fade", "next"],
+      ];
+      SEQUENCE.forEach(([fx, dir], i) => {
+        setTimeout(() => transition(fx, dir), 900 + i * 1200);
+      });
+    }
+  </script>
+</body>
+</html>
