@@ -21,11 +21,22 @@ const Reel = (function () {
     [["Esc"], "Close the slideshow"],
   ];
 
+  function seconds(ms) {
+    return ms % 1000 === 0 ? `${ms / 1000}s` : `${(ms / 1000).toFixed(1)}s`;
+  }
+
   // Offered rather than free-typed: a spinner invites 0.2s, and every value
   // here is one somebody would actually pick.
-  const DWELL_CHOICES = {
-    imageDwellMs: [2000, 3000, 5000, 8000, 15000],
-    embedDwellMs: [10000, 15000, 30000, 60000],
+  const dwell = (ms) => ({ value: ms, label: seconds(ms) });
+  const CHIP_CHOICES = {
+    imageDwellMs: [2000, 3000, 5000, 8000, 15000].map(dwell),
+    embedDwellMs: [10000, 15000, 30000, 60000].map(dwell),
+    transition: [
+      { value: "cube", label: "Carousel" },
+      { value: "slide", label: "Slide" },
+      { value: "fade", label: "Fade" },
+      { value: "none", label: "Off" },
+    ],
   };
 
   const root = document.getElementById("reel");
@@ -36,10 +47,6 @@ const Reel = (function () {
   const openers = [];
 
   let lastFocused = null;
-
-  function seconds(ms) {
-    return ms % 1000 === 0 ? `${ms / 1000}s` : `${(ms / 1000).toFixed(1)}s`;
-  }
 
   function buildKeys() {
     for (const [keys, description] of KEYS) {
@@ -58,13 +65,13 @@ const Reel = (function () {
   function buildChips() {
     for (const group of root.querySelectorAll(".chips")) {
       const setting = group.dataset.setting;
-      for (const value of DWELL_CHOICES[setting] || []) {
+      for (const { value, label } of CHIP_CHOICES[setting] || []) {
         const chip = document.createElement("button");
         chip.type = "button";
         chip.className = "chip";
         chip.setAttribute("role", "radio");
         chip.dataset.value = String(value);
-        chip.textContent = seconds(value);
+        chip.textContent = label;
         chip.addEventListener("click", () => SlideshowSettings.set(setting, value));
         group.appendChild(chip);
       }
@@ -77,7 +84,8 @@ const Reel = (function () {
     for (const group of root.querySelectorAll(".chips")) {
       const current = SlideshowSettings.get(group.dataset.setting);
       for (const chip of group.children) {
-        const on = Number(chip.dataset.value) === current;
+        // dataset is always a string; the stored value may be a number.
+        const on = chip.dataset.value === String(current);
         chip.setAttribute("aria-checked", String(on));
         // Only the selected chip is a tab stop; arrow keys move within the
         // group, which is how a radiogroup is meant to behave.

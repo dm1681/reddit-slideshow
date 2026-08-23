@@ -27,6 +27,9 @@
   /* How much room the console occupies, for the few things that must clear
      it — a video's own native control bar, mainly. */
   --console-space: clamp(96px, 17vh, 150px);
+  /* Carousel peeks: the width of a side pane and its gap from the edge. */
+  --peek-w: clamp(90px, 13vw, 220px);
+  --peek-gap: clamp(8px, 1.5vw, 24px);
 }
 
 * {
@@ -45,6 +48,10 @@ body {
   height: 100vh;
   cursor: default;
   user-select: none;
+  /* The vanishing point for the carousel turn. On the body, not the stage:
+     the stage is the element being rotated, and perspective on the rotated
+     element itself flattens the effect. */
+  perspective: clamp(900px, 90vw, 1600px);
 }
 
 /* Controls fade on idle */
@@ -88,11 +95,183 @@ body.media-video #content-container {
   padding-bottom: var(--console-space);
 }
 
+/* --- Carousel peeks ------------------------------------------------------ */
+
+/* The previous and next posts, dim and angled toward the centre like the
+   outer faces of a carousel. Only in Carousel mode (body.carousel), where the
+   stage is inset to make room; the other transitions keep the full frame.
+   The rotateY signs match the cube keyframes below, so the incoming turn
+   arrives from where its peek was standing. */
+
+body.carousel #content-container {
+  padding-left: calc(var(--peek-w) + var(--peek-gap) * 2);
+  padding-right: calc(var(--peek-w) + var(--peek-gap) * 2);
+}
+
+.peek {
+  position: fixed;
+  top: 50%;
+  width: var(--peek-w);
+  height: min(52vh, 420px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 40; /* over the stage's edge, under the scrim (90) and console (100) */
+  cursor: pointer;
+  opacity: 0.4;
+  filter: brightness(0.6) saturate(0.75);
+  transition: opacity 0.2s ease, filter 0.2s ease;
+}
+
+body.carousel .peek {
+  display: flex;
+}
+
+/* An empty pane is a dead click target at the screen edge — at the ends of
+   the queue there is nothing to stand for, so it is gone entirely. */
+body.carousel .peek:empty {
+  display: none;
+}
+
+#peek-prev {
+  left: var(--peek-gap);
+  transform: translateY(-50%) rotateY(38deg);
+}
+
+#peek-next {
+  right: var(--peek-gap);
+  transform: translateY(-50%) rotateY(-38deg);
+}
+
+.peek:hover {
+  opacity: 0.85;
+  filter: brightness(0.9) saturate(1);
+}
+
+.peek img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+}
+
+/* Stand-in when there is no image to show — a video or embed without a
+   thumbnail, or a gated post whose media stays withheld. */
+.peek-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 14px 12px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+
+.peek-card .glyph {
+  font-size: 22px;
+  color: var(--ink-3);
+}
+
+.peek-card .peek-title {
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--ink-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.peek-card .peek-tag {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--bad);
+  border: 1px solid rgba(255, 107, 107, 0.5);
+  border-radius: 100px;
+  padding: 2px 8px;
+}
+
+/* Refreshed on every slide change. Its own keyframes, not stage-fade: the
+   pane rests at 0.4, and a fade to 1 would flash bright before snapping dim. */
+.peek.peek-in {
+  animation: peek-in 300ms ease;
+}
+
+@keyframes peek-in {
+  from { opacity: 0; }
+  to   { opacity: 0.4; }
+}
+
+/* Too narrow for three panes — give the frame back to the post. */
+@media (max-width: 700px) {
+  body.carousel .peek {
+    display: none;
+  }
+  body.carousel #content-container {
+    padding-left: clamp(12px, 2vh, 24px);
+    padding-right: clamp(12px, 2vh, 24px);
+  }
+}
+
 #content-container img,
 #content-container video {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
+}
+
+/* --- Stage transitions --------------------------------------------------- */
+
+/* One entrance animation on the stage when the slide index moves, chosen in
+   the Reel panel. Direction-aware: the carousel turn swings the incoming post
+   in around a vertical axis from whichever side it "came from". The classes
+   are applied by the controller only on real navigation — a re-render of the
+   same post (reveal, settings change, embed resolution) never animates, so an
+   update can't make the post on screen appear to move.
+
+   The animation lives on the container rather than the media element because
+   the renderers own the container's children and wipe them freely; classes on
+   the container survive that. prefers-reduced-motion (below) zeroes all of
+   these. */
+
+.fx-cube.fx-next  { animation: stage-cube-next  480ms cubic-bezier(0.22, 1, 0.36, 1); }
+.fx-cube.fx-prev  { animation: stage-cube-prev  480ms cubic-bezier(0.22, 1, 0.36, 1); }
+.fx-slide.fx-next { animation: stage-slide-next 360ms cubic-bezier(0.22, 1, 0.36, 1); }
+.fx-slide.fx-prev { animation: stage-slide-prev 360ms cubic-bezier(0.22, 1, 0.36, 1); }
+.fx-fade.fx-next,
+.fx-fade.fx-prev  { animation: stage-fade 300ms ease; }
+
+@keyframes stage-cube-next {
+  from { transform: translateX(42%) rotateY(-38deg) scale(0.9); opacity: 0; }
+  55%  { opacity: 1; }
+  to   { transform: translateX(0) rotateY(0) scale(1); opacity: 1; }
+}
+
+@keyframes stage-cube-prev {
+  from { transform: translateX(-42%) rotateY(38deg) scale(0.9); opacity: 0; }
+  55%  { opacity: 1; }
+  to   { transform: translateX(0) rotateY(0) scale(1); opacity: 1; }
+}
+
+@keyframes stage-slide-next {
+  from { transform: translateX(7%); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+
+@keyframes stage-slide-prev {
+  from { transform: translateX(-7%); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+
+@keyframes stage-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 #content-container img {
@@ -133,6 +312,7 @@ body.media-video #content-container {
   flex-direction: column;
   align-items: center;
   gap: 12px;
+  animation: card-in 380ms cubic-bezier(0.22, 1, 0.36, 1);
   max-width: 48ch;
   padding: clamp(20px, 3.5vh, 34px) clamp(24px, 4vw, 40px);
   text-align: center;
@@ -233,11 +413,21 @@ body.media-video #content-container {
 /* No blur here on purpose. The media URL is never handed to an element for a
    gated post, so there is nothing on the page to blur — a CSS blur would mean
    the file had already been downloaded and decoded. */
+/* Cards announce themselves with a small 3D tilt-in — same move for the gate
+   and the failure card, since they are the same kind of moment. The inline
+   perspective() keeps the tilt local to the card: the body's perspective
+   belongs to the stage transition and its origin moves with the viewport. */
+@keyframes card-in {
+  from { transform: perspective(900px) rotateX(7deg) translateY(12px); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+
 .gate {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 14px;
+  animation: card-in 380ms cubic-bezier(0.22, 1, 0.36, 1);
   max-width: 40ch;
   padding: clamp(22px, 4vh, 38px) clamp(24px, 4vw, 44px);
   text-align: center;
@@ -332,6 +522,14 @@ body.media-video #content-container {
   backdrop-filter: blur(18px) saturate(1.25);
   border: 1px solid var(--panel-line);
   border-radius: 12px;
+  /* Once, on load — the idle fade owns opacity after this, and `both` would
+     pin opacity:1 forever and win over the .idle rule. */
+  animation: console-in 500ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes console-in {
+  from { transform: translateY(14px); opacity: 0; }
+  to   { transform: none; opacity: 1; }
 }
 
 #console-main {
@@ -407,12 +605,18 @@ body.media-video #content-container {
   font-family: inherit;
   line-height: 1;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.15s;
   white-space: nowrap;
 }
 
 #console button:hover:not(:disabled) {
   background: var(--btn-hover);
+  transform: translateY(-1px);
+}
+
+#console button:active:not(:disabled) {
+  transform: translateY(0) scale(0.96);
+  transition-duration: 0.06s;
 }
 
 #console button:disabled {
@@ -597,6 +801,9 @@ body.at-end #progress {
 }
 
 #reel-panel {
+  /* Re-runs on every open: toggling the backdrop's [hidden] restarts the
+     animation of everything inside it. */
+  animation: card-in 320ms cubic-bezier(0.22, 1, 0.36, 1);
   width: min(560px, 100%);
   max-height: 100%;
   overflow-y: auto;

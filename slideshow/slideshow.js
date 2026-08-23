@@ -223,6 +223,9 @@
       updateProgress();
       updateNavButtons();
       updateActionButtons();
+      // A neighbour may be the post that changed — an embed resolved to a
+      // direct video brings a thumbnail with it.
+      updatePeeks();
     }
   }
 
@@ -248,10 +251,115 @@
     }
   }
 
+  // --- Stage transitions ---
+  //
+  // Set by the navigation entry points and consumed by the very next render,
+  // so only a real index move animates. Every other reason to re-render — a
+  // reveal, a settings change, an embed resolving to a direct video, toggling
+  // auto-advance — repaints in place, because "the post you are looking at
+  // slides in from the right" is a lie about what happened.
+  let pendingStageFx = null; // "next" | "prev"
+
+  const STAGE_FX_CLASSES = ["fx-next", "fx-prev", "fx-cube", "fx-slide", "fx-fade"];
+
+  function stageTransitionStyle() {
+    if (typeof SlideshowSettings === "undefined") return "cube";
+    return SlideshowSettings.get("transition");
+  }
+
+  function playStageFx(direction) {
+    const style = stageTransitionStyle();
+    if (style === "none") return;
+    contentContainer.classList.remove(...STAGE_FX_CLASSES);
+    // Restart cleanly when a turn interrupts a turn (held arrow, fast clicks).
+    void contentContainer.offsetWidth;
+    contentContainer.classList.add("fx-" + style, "fx-" + direction);
+  }
+
+  contentContainer.addEventListener("animationend", (e) => {
+    if (e.target !== contentContainer) return;
+    contentContainer.classList.remove(...STAGE_FX_CLASSES);
+  });
+
+  // --- Carousel peeks ---
+  //
+  // In Carousel mode the previous and next posts stand dim and angled at the
+  // edges of the stage. They are previews, not renders: a still image (or a
+  // post's thumbnail) at most — never a playing video, never an iframe, and
+  // never any media at all for a gated post, whose peek is a tag card. The
+  // same withholding rule as the gate itself: a thumbnail is still the
+  // content.
+  const peekPrevPane = document.getElementById("peek-prev");
+  const peekNextPane = document.getElementById("peek-next");
+
+  function carouselOn() {
+    return stageTransitionStyle() === "cube";
+  }
+
+  function peekFill(pane, post) {
+    pane.textContent = "";
+    if (!post || !carouselOn()) return;
+
+    if (isGated(post)) {
+      const card = document.createElement("div");
+      card.className = "peek-card";
+      const tag = document.createElement("span");
+      tag.className = "peek-tag";
+      tag.textContent = gateReason(post) === "Adult" ? "18+" : "Spoiler";
+      const title = document.createElement("span");
+      title.className = "peek-title";
+      title.textContent = post.title || "";
+      card.append(tag, title);
+      pane.appendChild(card);
+    } else if (post.type === "image" && post.mediaUrl) {
+      // The next image is already preloaded and the previous one was just on
+      // screen, so this is a cache hit, not a second download.
+      const img = document.createElement("img");
+      img.alt = "";
+      img.addEventListener("error", () => img.remove());
+      img.src = post.mediaUrl;
+      pane.appendChild(img);
+    } else if (post.thumbnail) {
+      const img = document.createElement("img");
+      img.alt = "";
+      img.addEventListener("error", () => img.remove());
+      img.src = post.thumbnail;
+      pane.appendChild(img);
+    } else {
+      const card = document.createElement("div");
+      card.className = "peek-card";
+      const glyph = document.createElement("span");
+      glyph.className = "glyph";
+      glyph.textContent = post.type === "video" || post.type === "embed" ? "▶" : "◻";
+      const title = document.createElement("span");
+      title.className = "peek-title";
+      title.textContent = post.title || "";
+      card.append(glyph, title);
+      pane.appendChild(card);
+    }
+
+    pane.classList.remove("peek-in");
+    void pane.offsetWidth;
+    pane.classList.add("peek-in");
+  }
+
+  function updatePeeks() {
+    document.body.classList.toggle("carousel", carouselOn() && posts.length > 1);
+    peekFill(peekPrevPane, currentIndex > 0 ? posts[currentIndex - 1] : null);
+    peekFill(peekNextPane, posts[currentIndex + 1] || null);
+  }
+
+  peekPrevPane.addEventListener("click", goPrev);
+  peekNextPane.addEventListener("click", goNext);
+
   // --- Rendering ---
   function renderCurrentPost() {
     const post = posts[currentIndex];
     if (!post) return;
+
+    const stageFx = pendingStageFx;
+    pendingStageFx = null;
+    if (stageFx) playStageFx(stageFx);
 
     // Moving off the last post leaves the end-of-queue state behind.
     document.body.classList.remove("at-end");
@@ -302,6 +410,7 @@
     updateProgress();
     updateNavButtons();
     updateActionButtons();
+    updatePeeks();
 
     // Preload next image
     preloadNext();
@@ -547,6 +656,8 @@
           exhausted = result.exhausted || false;
           updateProgress();
           updateNavButtons();
+          // A refill can put a next-door neighbour where there was none.
+          updatePeeks();
         }
       } catch (e) {
         // Non-critical — continue with what we have
@@ -562,6 +673,7 @@
   function goNext() {
     if (currentIndex < posts.length - 1) {
       currentIndex++;
+      pendingStageFx = "next";
       renderCurrentPost();
     }
   }
@@ -569,6 +681,7 @@
   function goPrev() {
     if (currentIndex > 0) {
       currentIndex--;
+      pendingStageFx = "prev";
       renderCurrentPost();
     }
   }
@@ -630,6 +743,7 @@
     if (currentIndex < posts.length - 1) {
       stopAwaiting();
       currentIndex++;
+      pendingStageFx = "next";
       renderCurrentPost();
       return;
     }
@@ -912,6 +1026,9 @@
   if (typeof SlideshowSettings !== "undefined") {
     SlideshowSettings.onChange((key) => {
       if (key === "maskNsfw") renderCurrentPost();
+      // Peeks only, never a re-render: re-rendering restarts the media on
+      // screen, and switching transition styles must not replay a video.
+      if (key === "transition") updatePeeks();
     });
   }
 

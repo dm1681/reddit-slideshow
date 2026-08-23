@@ -10,6 +10,12 @@
      iframe on reddit.com, and until something here is focused every keypress
      goes to the Reddit page behind it. -->
 <body tabindex="-1">
+  <!-- Carousel peeks: the previous and next posts, dim and angled at the
+       edges of the stage. Decorative duplicates of the prev/next buttons —
+       hidden from the accessibility tree, clickable but never focusable. -->
+  <div id="peek-prev" class="peek" aria-hidden="true"></div>
+  <div id="peek-next" class="peek" aria-hidden="true"></div>
+
   <!-- Main content area — renderers populate this. Full-bleed: the console
        floats over the scrim rather than the stage being inset for it. -->
   <div id="content-container"></div>
@@ -83,6 +89,14 @@
 
         <section>
           <h3>Playback</h3>
+
+          <div class="setting">
+            <div class="setting-label">
+              <span>Slide transition</span>
+              <small>How the next post enters the stage. Carousel turns in 3D and shows the neighbouring posts dimly at the edges.</small>
+            </div>
+            <div class="chips" role="radiogroup" aria-label="Slide transition" data-setting="transition"></div>
+          </div>
 
           <div class="setting">
             <div class="setting-label">
