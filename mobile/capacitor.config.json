@@ -1,0 +1,13 @@
+{
+  "appId": "io.github.dm1681.reel",
+  "appName": "Reel",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    }
+  }
+}
