@@ -13,10 +13,16 @@ One exception to "nothing here is implemented": `mockups/stage-transitions.html`
 is the hypothesis mockup for the stage transition system (the Carousel 3D turn
 with dim neighbouring peeks, plus the flat Slide and Fade), which **is**
 implemented in `slideshow/`. `screens/stage-transitions-hypothesis.webm` is
-that mockup recorded before implementation; `screens/stage-transitions-real.webm`
-is the real slideshow page performing the same moves afterwards. The keyframes
-are duplicated in the mockup for standalone viewing — if they drift, trust
-`slideshow.css`.
+the mockup recorded before implementation — note it predates the peek
+iteration, so it shows the transitions without the dim neighbours;
+`screens/stage-transitions-real.webm` is the real slideshow page performing
+the same moves afterwards, peeks included. `screens/stage-transitions-side-by-side.webm`
+plays the finished mockup and the real page through an identical synchronized
+sequence, one panel each, as the confirm-the-hypothesis artifact. (In its
+final Fade step the real page correctly drops the peeks — they belong to
+Carousel mode only — while the mockup's static peeks stay; that divergence is
+the mockup's, not the implementation's.) The keyframes are duplicated in the
+mockup for standalone viewing — if they drift, trust `slideshow.css`.
 
 ## Recommendation: Cinema
 
