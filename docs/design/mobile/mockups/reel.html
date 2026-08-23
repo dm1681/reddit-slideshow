@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Reel — mobile mockup (expected)</title>
+<style>
+  /* ============================================================
+     Reel — TikTok-style mobile client. HYPOTHESIS MOCKUP.
+     Nothing here is implemented; this file states what the real
+     app is expected to look like. Scenes via ?scene=
+       feed      — video post, full chrome (default)
+       swipe     — mid-swipe between two slides
+       gate      — adult-gated post (media withheld)
+       settings  — bottom sheet over the feed
+     ============================================================ */
+  :root {
+    --text: #fff;
+    --text-dim: rgba(255, 255, 255, 0.72);
+    --glass: rgba(22, 24, 28, 0.55);
+    --glass-border: rgba(255, 255, 255, 0.14);
+    --up: #ff4500;
+    --down: #7193ff;
+    --save: #ffd635;
+    --accent: #00e0c6;   /* focus & brand — never an active-state colour */
+    --adult: #ff375f;
+    --spoiler: #ffb02e;
+    --rail-w: 78px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; background: #000; color: var(--text);
+    font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    overflow: hidden; -webkit-font-smoothing: antialiased; }
+  button { font: inherit; color: inherit; background: none; border: none; }
+
+  /* ---- the pager ---- */
+  #feed {
+    height: 100dvh; overflow-y: auto;
+    scroll-snap-type: y mandatory; scrollbar-width: none;
+  }
+  #feed::-webkit-scrollbar { display: none; }
+  .slide {
+    position: relative; height: 100dvh; scroll-snap-align: start;
+    scroll-snap-stop: always; overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  /* mock media: gradients standing in for real pixels */
+  .media { position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 10px; }
+  .media .glyph { font-size: 92px; filter: drop-shadow(0 6px 24px rgba(0,0,0,.45)); }
+  .media .hint { font-size: 12px; letter-spacing: .12em; text-transform: uppercase;
+    color: rgba(255,255,255,.55); }
+  .m-dog   { background: radial-gradient(120% 90% at 50% 20%, #ffd9a0 0%, #f4906b 38%, #7a3d5e 74%, #241a33 100%); }
+  .m-alps  { background: linear-gradient(178deg, #2b2d63 0%, #7b6bb0 34%, #f3a184 66%, #46243c 100%); }
+  .m-coffee{ background: radial-gradient(110% 110% at 50% 85%, #d8a25f 0%, #7c4a26 45%, #2a180d 100%); }
+  .m-leica { background: linear-gradient(160deg, #4a4f57 0%, #23262b 55%, #101215 100%); }
+
+  /* per-slide scrims: page-level layers under the chrome, never children of media */
+  .scrim-top, .scrim-bottom { position: absolute; left: 0; right: 0; pointer-events: none; }
+  .scrim-top { top: 0; height: 130px;
+    background: linear-gradient(rgba(0,0,0,.58), rgba(0,0,0,0)); }
+  .scrim-bottom { bottom: 0; height: 240px;
+    background: linear-gradient(rgba(0,0,0,0), rgba(0,0,0,.74)); }
+
+  /* ---- global chrome (fixed) ---- */
+  #ticks { position: fixed; top: max(6px, env(safe-area-inset-top)); left: 10px; right: 10px;
+    display: flex; gap: 3px; z-index: 30; }
+  #ticks i { flex: 1; height: 3px; border-radius: 2px; background: rgba(255,255,255,.22); }
+  #ticks i.seen { background: rgba(255,255,255,.85); }
+  #ticks i.current { background: var(--text); box-shadow: 0 0 0 .5px rgba(0,0,0,.4); }
+
+  #topbar { position: fixed; top: calc(max(6px, env(safe-area-inset-top)) + 11px);
+    left: 10px; right: 10px; display: flex; align-items: center; gap: 8px; z-index: 30; }
+  .pill { display: inline-flex; align-items: center; gap: 7px;
+    background: var(--glass); border: 1px solid var(--glass-border);
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    border-radius: 999px; padding: 7px 12px; font-size: 12.5px; font-weight: 600; }
+  .pill .brand { color: var(--accent); letter-spacing: .02em; }
+  .pill .demo { font-size: 10px; font-weight: 700; letter-spacing: .08em;
+    padding: 2px 6px; border-radius: 999px; background: rgba(183,133,245,.28);
+    border: 1px solid rgba(183,133,245,.55); color: #d9c2ff; }
+  #topbar .spacer { flex: 1; }
+  #counter { font-variant-numeric: tabular-nums; font-weight: 600; }
+  #gear { width: 38px; height: 38px; border-radius: 999px; font-size: 17px;
+    background: var(--glass); border: 1px solid var(--glass-border);
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    display: flex; align-items: center; justify-content: center; }
+
+  /* honesty watermark: this is the mockup, not the app */
+  #expected-tag { position: fixed; top: calc(max(6px, env(safe-area-inset-top)) + 58px);
+    left: 10px; z-index: 30; font-size: 9.5px; font-weight: 700; letter-spacing: .14em;
+    color: rgba(255,255,255,.5); text-transform: uppercase; }
+
+  /* ---- per-slide chrome (travels with the slide) ---- */
+  .rail { position: absolute; right: 8px; bottom: 118px; z-index: 20;
+    display: flex; flex-direction: column; align-items: center; gap: 13px;
+    width: var(--rail-w); }
+  .rail .btn { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .rail .disc { width: 46px; height: 46px; border-radius: 999px; font-size: 19px;
+    background: var(--glass); border: 1px solid var(--glass-border);
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    display: flex; align-items: center; justify-content: center; }
+  .rail .lbl { font-size: 11px; font-weight: 600; color: var(--text-dim);
+    font-variant-numeric: tabular-nums; }
+  .rail .vote-score { font-size: 12.5px; font-weight: 700; margin: -4px 0;
+    font-variant-numeric: tabular-nums; }
+  .rail .btn.on .disc { border-color: currentColor; }
+  .rail .btn.up.on { color: var(--up); }
+  .rail .btn.save.on { color: var(--save); }
+
+  .meta { position: absolute; left: 14px; right: calc(var(--rail-w) + 10px);
+    bottom: max(18px, env(safe-area-inset-bottom)); z-index: 20;
+    display: flex; flex-direction: column; gap: 7px; }
+  .meta .chips { display: flex; gap: 6px; }
+  .chip { font-size: 10.5px; font-weight: 700; letter-spacing: .04em;
+    padding: 3px 8px; border-radius: 999px; background: rgba(255,255,255,.14);
+    border: 1px solid rgba(255,255,255,.2); }
+  .chip.gallery { background: rgba(0,224,198,.16); border-color: rgba(0,224,198,.45); color: #9df2e6; }
+  .meta .title { font-size: 15.5px; line-height: 1.35; font-weight: 650;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden; text-shadow: 0 1px 8px rgba(0,0,0,.5); }
+  .meta .sub { font-size: 12.5px; color: var(--text-dim); }
+
+  /* video extras */
+  .vprogress { position: absolute; left: 0; right: 0;
+    bottom: 0; height: 2.5px;
+    background: rgba(255,255,255,.22); z-index: 20; }
+  .vprogress i { position: absolute; left: 0; top: 0; bottom: 0; width: 34%;
+    background: rgba(255,255,255,.92); }
+  .soundhint { position: absolute; top: 118px; left: 50%; transform: translateX(-50%);
+    z-index: 20; font-size: 12.5px; padding: 7px 13px; border-radius: 999px;
+    background: rgba(0,0,0,.68); border: 1px solid var(--glass-border); }
+
+  /* ---- the gate (media withheld, nothing to blur) ---- */
+  .slide.gated { background:
+    repeating-linear-gradient(45deg, #0b0d10 0 14px, #0e1014 14px 28px); }
+  .gatecard { position: relative; z-index: 20; width: min(300px, 74vw);
+    margin-right: 58px; /* clear the action rail */
+    background: var(--glass); border: 1px solid var(--glass-border);
+    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    border-radius: 18px; padding: 26px 22px; text-align: center;
+    display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  .gatetag { font-size: 11px; font-weight: 800; letter-spacing: .1em;
+    padding: 4px 10px; border-radius: 999px; text-transform: uppercase;
+    background: rgba(255,55,95,.18); border: 1px solid var(--adult); color: #ff8aa4; }
+  .gatecard .gtitle { font-size: 15.5px; font-weight: 650; line-height: 1.4; }
+  .reveal { padding: 11px 22px; border-radius: 999px; font-size: 14px; font-weight: 700;
+    border: 1.5px solid rgba(255,255,255,.85); }
+  .gatenote { font-size: 12px; color: var(--text-dim); line-height: 1.45; }
+
+  /* ---- settings sheet ---- */
+  #dim { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 40; display: none; }
+  #sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 41; display: none;
+    background: #16181c; border-radius: 20px 20px 0 0;
+    border-top: 1px solid var(--glass-border);
+    padding: 10px 18px calc(max(16px, env(safe-area-inset-bottom)) + 8px);
+    max-height: 72dvh; }
+  #sheet .handle { width: 40px; height: 4px; border-radius: 2px;
+    background: rgba(255,255,255,.28); margin: 2px auto 14px; }
+  #sheet h2 { font-size: 16px; margin-bottom: 6px; }
+  .row { display: flex; align-items: center; gap: 12px; padding: 13px 0;
+    border-bottom: 1px solid rgba(255,255,255,.07); }
+  .row:last-child { border-bottom: none; }
+  .row .grow { flex: 1; }
+  .row .name { font-size: 14.5px; font-weight: 600; }
+  .row .note { font-size: 12px; color: var(--text-dim); margin-top: 2px; line-height: 1.4; }
+  .toggle { width: 46px; height: 27px; border-radius: 999px; position: relative;
+    background: rgba(255,255,255,.18); flex: none; }
+  .toggle.on { background: var(--accent); }
+  .toggle i { position: absolute; top: 2.5px; left: 3px; width: 22px; height: 22px;
+    border-radius: 999px; background: #fff; transition: left .15s; }
+  .toggle.on i { left: 21px; }
+  .slider { flex: none; width: 130px; height: 4px; border-radius: 2px;
+    background: rgba(255,255,255,.18); position: relative; }
+  .slider i { position: absolute; left: 0; top: 0; bottom: 0; width: 22%;
+    border-radius: 2px; background: var(--accent); }
+  .slider b { position: absolute; top: -7px; left: 22%; width: 18px; height: 18px;
+    margin-left: -9px; border-radius: 999px; background: #fff; }
+  .value { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums;
+    width: 34px; text-align: right; }
+
+  /* scene switches */
+  body[data-scene="settings"] #dim, body[data-scene="settings"] #sheet { display: block; }
+</style>
+</head>
+<body data-scene="feed">
+
+<div id="ticks">
+  <i class="seen"></i><i class="current"></i><i></i><i></i><i></i><i></i><i></i><i></i>
+</div>
+<div id="topbar">
+  <span class="pill"><span class="brand">Reel</span> demo feed <span class="demo">DEMO</span></span>
+  <span class="spacer"></span>
+  <span class="pill" id="counter">2 / 8+</span>
+  <button id="gear" aria-label="Settings">⚙</button>
+</div>
+<div id="expected-tag">expected · mockup</div>
+
+<main id="feed">
+
+  <!-- 1 · video post (with audio) -->
+  <section class="slide">
+    <div class="media m-dog"><span class="glyph">🐕❄️</span><span class="hint">video · mock frame</span></div>
+    <div class="scrim-top"></div><div class="scrim-bottom"></div>
+    <div class="soundhint">🔇 Tap for sound</div>
+    <div class="vprogress"><i></i></div>
+    <div class="rail">
+      <div class="btn up on"><span class="disc">▲</span></div>
+      <div class="vote-score">12.4k</div>
+      <div class="btn down"><span class="disc">▼</span></div>
+      <div class="btn"><span class="disc">💬</span><span class="lbl">843</span></div>
+      <div class="btn save"><span class="disc">☆</span><span class="lbl">Save</span></div>
+      <div class="btn"><span class="disc">⏱</span><span class="lbl">Off</span></div>
+    </div>
+    <div class="meta">
+      <div class="chips"><span class="chip">Video</span></div>
+      <div class="title">Golden retriever discovers snow for the first time and refuses to come back inside</div>
+      <div class="sub">r/aww · u/pupsnaps · 7h</div>
+    </div>
+  </section>
+
+  <!-- 2 · image post -->
+  <section class="slide">
+    <div class="media m-alps"><span class="glyph">🏔️</span><span class="hint">image · mock frame</span></div>
+    <div class="scrim-top"></div><div class="scrim-bottom"></div>
+    <div class="rail">
+      <div class="btn up"><span class="disc">▲</span></div>
+      <div class="vote-score">31.9k</div>
+      <div class="btn down"><span class="disc">▼</span></div>
+      <div class="btn"><span class="disc">💬</span><span class="lbl">402</span></div>
+      <div class="btn save on"><span class="disc">★</span><span class="lbl">Saved</span></div>
+      <div class="btn"><span class="disc">⏱</span><span class="lbl">Off</span></div>
+    </div>
+    <div class="meta">
+      <div class="chips"><span class="chip">OC</span></div>
+      <div class="title">Sunrise over the Dolomites after three days of rain [OC] [4032×3024]</div>
+      <div class="sub">r/EarthPorn · u/alpen_glow · 11h</div>
+    </div>
+  </section>
+
+  <!-- 3 · silent gif loop -->
+  <section class="slide">
+    <div class="media m-coffee"><span class="glyph">☕</span><span class="hint">gif loop · mock frame</span></div>
+    <div class="scrim-top"></div><div class="scrim-bottom"></div>
+    <div class="rail">
+      <div class="btn up"><span class="disc">▲</span></div>
+      <div class="vote-score">8.1k</div>
+      <div class="btn down"><span class="disc">▼</span></div>
+      <div class="btn"><span class="disc">💬</span><span class="lbl">96</span></div>
+      <div class="btn save"><span class="disc">☆</span><span class="lbl">Save</span></div>
+      <div class="btn"><span class="disc">⏱</span><span class="lbl">Off</span></div>
+    </div>
+    <div class="meta">
+      <div class="chips"><span class="chip">Perfect Loop</span></div>
+      <div class="title">Espresso extraction at 120 fps, cut to a perfect loop</div>
+      <div class="sub">r/oddlysatisfying · u/tamped · 3h</div>
+    </div>
+  </section>
+
+  <!-- 4 · adult-gated post: mediaUrl withheld, so there are no pixels to blur -->
+  <section class="slide gated">
+    <div class="gatecard">
+      <span class="gatetag">18+ Adult</span>
+      <p class="gtitle">Aftermath of the refinery fire — aerial footage</p>
+      <button class="reveal">Reveal this post</button>
+      <p class="gatenote">Hidden because it is tagged adult. The file has not been
+        downloaded. Turn the mask off for good in Settings.</p>
+    </div>
+    <div class="rail">
+      <div class="btn up"><span class="disc">▲</span></div>
+      <div class="vote-score">5.4k</div>
+      <div class="btn down"><span class="disc">▼</span></div>
+      <div class="btn"><span class="disc">💬</span><span class="lbl">1.2k</span></div>
+      <div class="btn save"><span class="disc">☆</span><span class="lbl">Save</span></div>
+      <div class="btn"><span class="disc">⏱</span><span class="lbl">Off</span></div>
+    </div>
+    <div class="meta">
+      <div class="chips"><span class="chip" style="border-color:var(--adult);color:#ff8aa4">18+</span></div>
+      <div class="title">Aftermath of the refinery fire — aerial footage</div>
+      <div class="sub">r/CatastrophicFailure · u/dronewatch · 5h</div>
+    </div>
+  </section>
+
+  <!-- 5 · gallery item (expanded one-post-per-image) -->
+  <section class="slide">
+    <div class="media m-leica"><span class="glyph">📷</span><span class="hint">gallery 1 of 3 · mock frame</span></div>
+    <div class="scrim-top"></div><div class="scrim-bottom"></div>
+    <div class="rail">
+      <div class="btn up"><span class="disc">▲</span></div>
+      <div class="vote-score">2.3k</div>
+      <div class="btn down"><span class="disc">▼</span></div>
+      <div class="btn"><span class="disc">💬</span><span class="lbl">187</span></div>
+      <div class="btn save"><span class="disc">☆</span><span class="lbl">Save</span></div>
+      <div class="btn"><span class="disc">⏱</span><span class="lbl">Off</span></div>
+    </div>
+    <div class="meta">
+      <div class="chips"><span class="chip gallery">Gallery 1 / 3</span></div>
+      <div class="title">Restored my grandfather's 1974 Leica back to working order (1/3)</div>
+      <div class="sub">r/AnalogCommunity · u/rangefinder · 22h</div>
+    </div>
+  </section>
+
+</main>
+
+<!-- settings sheet -->
+<div id="dim"></div>
+<div id="sheet">
+  <div class="handle"></div>
+  <h2>Playback</h2>
+  <div class="row">
+    <div class="grow"><div class="name">Auto-advance</div>
+      <div class="note">Videos play to the end; stills wait for the dwell below.</div></div>
+    <div class="toggle"><i></i></div>
+  </div>
+  <div class="row">
+    <div class="grow"><div class="name">Image dwell</div></div>
+    <div class="slider"><i></i><b></b></div><div class="value">5s</div>
+  </div>
+  <div class="row">
+    <div class="grow"><div class="name">Mask adult &amp; spoiler posts</div>
+      <div class="note">Masked posts stay hidden until you reveal them —
+        the file is never downloaded while masked.</div></div>
+    <div class="toggle on"><i></i></div>
+  </div>
+  <div class="row">
+    <div class="grow"><div class="name">Source</div>
+      <div class="note">Demo content. Reddit sign-in lands once API registration
+        is sorted (see research doc).</div></div>
+    <span class="pill"><span class="demo">DEMO</span></span>
+  </div>
+</div>
+
+<script>
+  // Scene control for the screenshot rig. ?scene=feed|swipe|gate|settings
+  const scene = new URLSearchParams(location.search).get("scene") || "feed";
+  document.body.dataset.scene = scene;
+  const feed = document.getElementById("feed");
+  const slideH = () => feed.querySelector(".slide").getBoundingClientRect().height;
+  if (scene === "swipe") {
+    // frozen mid-swipe between slide 1 and 2 — no snap while we hold it there
+    feed.style.scrollSnapType = "none";
+    feed.scrollTop = slideH() * 0.45;
+  } else if (scene === "gate") {
+    feed.scrollTop = slideH() * 3;
+    document.getElementById("counter").textContent = "4 / 8+";
+    const t = document.querySelectorAll("#ticks i");
+    t[1].className = "seen"; t[2].className = "seen"; t[3].className = "current";
+  } else if (scene === "settings") {
+    feed.scrollTop = slideH();
+  }
+  // hook for the recording script
+  window.__reel = {
+    scrollTo(y, smooth = true) {
+      feed.scrollTo({ top: y, behavior: smooth ? "smooth" : "auto" });
+    },
+    slideH,
+  };
+</script>
+</body>
+</html>

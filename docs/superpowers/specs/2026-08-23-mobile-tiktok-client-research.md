@@ -542,6 +542,31 @@ permanently.
    first; App Store last. F-Droid is available if the app stays FLOSS and each user builds
    with or supplies their own key.
 
+## Decision addendum (2026-08-23, build session)
+
+The build that followed this research chose **Capacitor (web core + native shell), not React
+Native + Expo**, deviating from the recommendation above. Reasons, in order:
+
+1. **Verifiable-by-screenshot in the build environment.** The build ran in a container with
+   no Android/iOS toolchain and all Reddit domains blocked at the egress proxy. A Capacitor
+   app's UI is a web page: what Playwright's Chromium renders during development is the same
+   engine the shipped WebView runs, so every screenshot/video produced along the way shows
+   the production UI. An Expo app could only have been previewed via react-native-web, whose
+   pager and video components differ from the native ones — the screenshots would show a
+   simulation of the app rather than the app.
+2. **Reuse.** §3 rates Capacitor's reuse of this repo highest: the renderers' DOM code,
+   `settings.js`, and the gate port nearly verbatim instead of being re-expressed as React
+   components.
+3. **Demo-first was forced anyway.** With Reddit unreachable from the build environment and
+   the Responsible Builder question open, the app had to be built against a swappable data
+   source (bundled demo fixtures in the Reddit listing wire shape, real listing fetch behind
+   the same interface). That architecture is framework-neutral, so the framework choice
+   stops being load-bearing.
+4. **The RN migration stays open.** The WebView-video-performance concern in §3 is real but
+   unbenchmarked; if it disappoints on device, the domain core (`mobile/www/js/core`,
+   `data`) ports to RN unchanged and only the pager/renderer layer is rewritten — which is
+   the layer RN was going to rewrite anyway.
+
 ### Open questions
 
 1. What exactly does the June 2026 Responsible Builder Policy require for a *personal*
