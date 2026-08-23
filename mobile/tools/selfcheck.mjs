@@ -92,6 +92,27 @@ await page.waitForTimeout(2200);
   check("sound pill cleared", s.soundPill === false);
 }
 
+// ---- toggling auto-advance must not restart or pause the playing video ----
+{
+  const before = await page.evaluate(() => {
+    const v = document.querySelector(".slide.active video");
+    return v.currentTime;
+  });
+  await page.evaluate(() => window.__reel.Settings.set("autoAdvance", true));
+  await page.waitForTimeout(350);
+  await page.evaluate(() => window.__reel.Settings.set("autoAdvance", false));
+  await page.waitForTimeout(350);
+  const after = await page.evaluate(() => {
+    const v = document.querySelector(".slide.active video");
+    return { t: v.currentTime, paused: v.paused };
+  });
+  check(
+    "auto on/off left playback running, no reset to 0",
+    after.paused === false && after.t > before,
+    JSON.stringify({ before, after })
+  );
+}
+
 // ---- optimistic vote + save on the active slide ----
 {
   await page.evaluate(() => {
@@ -106,6 +127,22 @@ await page.waitForTimeout(2200);
   }));
   check("upvote is optimistic", s.upOn && s.post.likes === true);
   check("save is optimistic", s.savedLbl === "Saved" && s.post.saved === true);
+
+  // Pressing the same button again must take the action back — this is the
+  // regression the frozen-post-reference bug caused: the second press used to
+  // recompute the toggle from pre-first-press state.
+  await page.evaluate(() => {
+    document.querySelector(".slide.active .rail .btn.up").click();
+    document.querySelector(".slide.active .rail .btn.save").click();
+  });
+  await page.waitForTimeout(500);
+  const undo = await page.evaluate(() => ({
+    upPressed: document.querySelector(".slide.active .rail .btn.up").getAttribute("aria-pressed"),
+    savedLbl: document.querySelector(".slide.active .rail .btn.save .lbl").textContent,
+    post: window.__reel.feed.posts[0],
+  }));
+  check("second press retracts the vote", undo.upPressed === "false" && undo.post.likes === null, JSON.stringify(undo.post && { likes: undo.post.likes }));
+  check("second press unsaves", undo.savedLbl === "Save" && undo.post.saved === false);
 }
 
 // ---- moving on pauses the video (active-page discipline) ----
@@ -232,7 +269,15 @@ await page.waitForTimeout(2200);
   await arriveAt("t3_demo07", 4500, "gate card auto-advanced after GATE_DWELL");
   const fetchedFinale = requested.some((u) => u.includes("finale"));
   check("gate auto-advance did not fetch the masked file", !fetchedFinale);
-  await page.evaluate(() => window.__reel.Settings.set("autoAdvance", false));
+
+  // Run auto-advance off the end of the exhausted feed: it must switch
+  // itself off and land on the end card.
+  await arriveAt("t3_demo08", 4500, "text post auto-advanced to the link card");
+  const ended = await page
+    .waitForFunction(() => window.__reel.Settings.get("autoAdvance") === false, null, { timeout: 6000 })
+    .then(() => true)
+    .catch(() => false);
+  check("auto-advance switched itself off at true exhaustion", ended);
 }
 
 // ---- masked media never fetched, full-session sweep ----

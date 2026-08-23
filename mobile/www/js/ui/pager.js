@@ -159,9 +159,12 @@ export function createPager({ container, feed, chrome, actions }) {
 
   feed.onUpdate(() => {
     ensureSlides();
-    // Refresh optimistic action state on whatever is mounted.
+    // Sync every slide's post reference to the store's live copy — an
+    // optimistic vote/save replaces the object immutably, and a slide acting
+    // on its creation-time copy would recompute the toggle from stale state.
     slides.forEach((slide, i) => {
-      if (slide.mounted) slide.chrome.refreshActions(feed.posts[i] || slide.post);
+      slide.post = feed.posts[i];
+      if (slide.mounted) slide.chrome.refreshActions(slide.post);
     });
     chrome.update({ index: activeIndex, total: feed.posts.length, exhausted: feed.exhausted });
     if (waiting && activeIndex < slides.length - 1) {
@@ -175,12 +178,17 @@ export function createPager({ container, feed, chrome, actions }) {
 
   Settings.onChange((key) => {
     if (key === "autoAdvance") {
-      // Re-arm or disarm the current slide's timers without restarting its
-      // media: deactivate() cancels, activate() re-arms from now.
-      const current = slides[activeIndex];
-      if (current && current.active) {
-        current.deactivate();
-        current.activate();
+      // Turning ON needs a deactivate/activate cycle so the current slide
+      // arms its dwell timers from now. Turning OFF must NOT cycle: every
+      // armed timer already checks isAutoOn() when it fires, and the cycle's
+      // play() would restart a just-ended video — the exhaustion path flips
+      // this setting off synchronously while the final video sits on 'ended'.
+      if (Settings.get("autoAdvance")) {
+        const current = slides[activeIndex];
+        if (current && current.active) {
+          current.deactivate();
+          current.activate();
+        }
       }
       stopWaiting();
       refreshAutoLabels();

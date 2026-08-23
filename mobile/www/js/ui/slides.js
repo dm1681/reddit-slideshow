@@ -243,7 +243,10 @@ function mountVideo(stage, slide, post, ctx) {
     });
     // A video that never loads never fires `ended`; without this grace,
     // auto-advance would stop here for good.
-    if (active && ctx.isAutoOn()) later(() => ctx.onEnded(), ERROR_ADVANCE_MS);
+    if (active && ctx.isAutoOn()) later(() => {
+      // auto-advance may have been switched off during the grace window
+      if (ctx.isAutoOn()) ctx.onEnded();
+    }, ERROR_ADVANCE_MS);
   }
 
   video.addEventListener("error", () => {
@@ -299,7 +302,10 @@ function mountVideo(stage, slide, post, ctx) {
         if (Number.isFinite(video.duration) && video.duration > 0) armGifAdvance();
         else video.addEventListener("loadedmetadata", armGifAdvance, { once: true });
       }
-      if (failed && ctx.isAutoOn()) later(() => ctx.onEnded(), ERROR_ADVANCE_MS);
+      if (failed && ctx.isAutoOn()) later(() => {
+      // auto-advance may have been switched off during the grace window
+      if (ctx.isAutoOn()) ctx.onEnded();
+    }, ERROR_ADVANCE_MS);
     },
     deactivate() {
       active = false;
@@ -379,7 +385,10 @@ function mountImage(stage, slide, post, ctx) {
       img.src = "";
       img.src = post.mediaUrl;
     });
-    if (active && ctx.isAutoOn()) later(() => ctx.onEnded(), ERROR_ADVANCE_MS);
+    if (active && ctx.isAutoOn()) later(() => {
+      // auto-advance may have been switched off during the grace window
+      if (ctx.isAutoOn()) ctx.onEnded();
+    }, ERROR_ADVANCE_MS);
   });
 
   img.src = post.mediaUrl;
@@ -388,7 +397,10 @@ function mountImage(stage, slide, post, ctx) {
     activate() {
       active = true;
       armDwell();
-      if (failed && ctx.isAutoOn()) later(() => ctx.onEnded(), ERROR_ADVANCE_MS);
+      if (failed && ctx.isAutoOn()) later(() => {
+      // auto-advance may have been switched off during the grace window
+      if (ctx.isAutoOn()) ctx.onEnded();
+    }, ERROR_ADVANCE_MS);
     },
     deactivate() {
       active = false;
@@ -483,7 +495,12 @@ function mountGate(stage, slide, post, ctx) {
 }
 
 // ------------------------------------------------------------------- assembly
-export function createSlide(post, ctx) {
+export function createSlide(initialPost, ctx) {
+  // The pager reassigns api.post on every feed update, so actions and
+  // remounts always read the live object — an optimistic vote/save replaces
+  // the post immutably in the store, and computing the next toggle from a
+  // frozen creation-time copy made "press again to undo" impossible.
+  let post = initialPost;
   const slide = el("section", `slide type-${post.type}`);
   slide.dataset.postId = post.id;
   const stage = el("div", "stage");
@@ -516,7 +533,12 @@ export function createSlide(post, ctx) {
 
   const api = {
     el: slide,
-    post,
+    get post() {
+      return post;
+    },
+    set post(next) {
+      if (next) post = next;
+    },
     chrome,
     active: false,
     mounted: false,
