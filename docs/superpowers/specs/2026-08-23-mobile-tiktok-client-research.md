@@ -567,6 +567,54 @@ Native + Expo**, deviating from the recommendation above. Reasons, in order:
    `data`) ports to RN unchanged and only the pager/renderer layer is rewritten — which is
    the layer RN was going to rewrite anyway.
 
+
+## Live content: what actually reaches Reddit (measured 2026-08-23)
+
+Open questions 3 and 4 below were tested from the developer's own residential
+connection (Windows, home ISP) — the network a self-hosted install would
+actually run on. **[VERIFIED by direct measurement]**, and the answer is worse
+than the terms alone suggested: Reddit's public read endpoints are closed to
+scripted clients entirely, so no proxy design fixes it.
+
+| Request | Result |
+|---|---|
+| `curl https://www.reddit.com/r/EarthPorn.json` (honest UA per Reddit's format) | **403**, ~190 KB HTML challenge page, not JSON |
+| same, browser Chrome UA | **403**, same challenge |
+| same, no UA | **403**, same challenge |
+| Node `fetch` (what `tools/serve.mjs` uses) | **403**, same challenge |
+| `https://old.reddit.com/r/EarthPorn.json` | **302** to `/login/?reason=lor2` (logged-out restriction) |
+| `https://oauth.reddit.com/r/EarthPorn.json` (no token) | **403** (expected — needs a Bearer token) |
+| `https://www.reddit.com/r/EarthPorn/` (HTML page) | **200**, but an 8 KB JavaScript bot-check shell — **0** `shreddit-post` elements |
+| Automated Chromium (Playwright, JS enabled, mobile viewport) | **200**, served the same ~190 KB challenge; `document.title` empty, **0** posts |
+| `https://i.redd.it/<file>` | **403** |
+
+Consequences:
+
+1. **The `.json` listing path is dead for any standalone client** — packaged
+   app, self-hosted proxy, or PWA. §1's "plan around OAuth from day one" was
+   right, and understated: the free unauthenticated tier is not merely
+   throttled, it is walled.
+2. **HTML scraping does not rescue it either.** The subreddit page served to a
+   scripted client carries no posts, so the extension's scraping logic cannot
+   simply be pointed at a server-side fetch.
+3. **Why the extension still works**: it executes inside the user's own
+   human-driven, logged-in Firefox, which has already cleared the bot check and
+   carries session cookies. Neither is available to a proxy or a headless
+   fetch. This is the sharpest version of §5's warning that the fetching layer
+   does not transplant — it does not transplant *at all*.
+4. **The two remaining paths to live content**, both real work:
+   - **OAuth installed-app** against `oauth.reddit.com` with a Bearer token —
+     Reddit's sanctioned route, and a different endpoint from the walled public
+     ones. Gated on registration (open question 1).
+   - **In-app WebView the user signs into**, with the feed read from the DOM —
+     the extension's model ported to mobile. No registration, matches the
+     project's existing "scrape the page, no API calls" stance, and keeps
+     working exactly as long as the user's own session does.
+
+Nothing else in this document changes; the demo-source architecture already
+assumed the data source is swappable, which is what makes either path a
+contained change (`mobile/www/js/data/`).
+
 ### Open questions
 
 1. What exactly does the June 2026 Responsible Builder Policy require for a *personal*
@@ -574,11 +622,13 @@ Native + Expo**, deviating from the recommendation above. Reasons, in order:
    id now application-gated? (Primary page was unreachable from this environment.)
 2. Will Reddit grant written authorization (for Apple 5.2.2) to a small free client, and on
    what terms — per-user keys, subscription, or refusal?
-3. Do unauthenticated and OAuth requests from this app's real usage pattern actually see
-   100 QPM / 10-minute-window behavior today? (Could not be tested — reddit.com unreachable
-   from this environment; re-run `curl` with a proper UA from a residential network.)
-4. Does reddit.com send any `Access-Control-Allow-Origin` on `.json` endpoints (kills or
-   revives the PWA option)? Untested for the same reason.
+3. ~~Do unauthenticated requests actually work today?~~ **Answered 2026-08-23
+   (see "Live content" above): no — unauthenticated listing reads return an
+   HTML bot-check page, from a residential IP, for every client tested.** What
+   remains open is the OAuth rate behaviour once a token exists.
+4. ~~Does reddit.com send `Access-Control-Allow-Origin` on `.json`?~~ **Moot:
+   the endpoint never returns JSON to a scripted caller at all, so CORS is not
+   the binding constraint — the bot wall is.**
 5. Redgifs/imgur terms for a mobile client (the extension's resolver spoofs a Referer);
    drop, keep, or replace those sources?
 6. iOS distribution for personal use: is TestFlight-internal (100 users, no review of

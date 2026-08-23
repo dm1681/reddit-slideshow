@@ -43,7 +43,16 @@ export function createRedditSource({ canHls, subreddit }) {
         headers: { Accept: "application/json" },
       });
       if (!resp.ok) {
-        throw new Error(`Reddit returned ${resp.status}`);
+        // The self-host proxy reports the bot wall as a structured error; say
+        // what it means rather than echoing a status code.
+        let detail = null;
+        try {
+          const body = await resp.json();
+          if (body && body.error === "reddit_bot_wall") detail = body.detail;
+        } catch (e) {
+          // not our proxy, or not JSON — fall through to the status message
+        }
+        throw new Error(detail || `Reddit returned ${resp.status}`);
       }
       const listing = await resp.json();
       return {

@@ -52,6 +52,26 @@ async function proxyReddit(req, res, url) {
       signal: AbortSignal.timeout(10_000),
     });
     const body = await resp.text();
+
+    // Reddit answers scripted clients with an HTML bot-check page rather than
+    // JSON — measured 2026-08-23: HTTP 403 and ~190KB of HTML for curl, Node
+    // fetch, and automated browsers alike. Detected here so the app can say
+    // what actually happened instead of reporting a parse error.
+    let isJson = false;
+    try { JSON.parse(body); isJson = true; } catch (e) { isJson = false; }
+    if (!isJson) {
+      res.writeHead(502, { "content-type": "application/json" });
+      res.end(JSON.stringify({
+        error: "reddit_bot_wall",
+        upstreamStatus: resp.status,
+        detail:
+          "Reddit served an HTML bot-check page instead of JSON. Public listing " +
+          "endpoints are closed to scripted clients; this needs OAuth or an " +
+          "in-app WebView you sign into. See mobile/README.md.",
+      }));
+      return;
+    }
+
     // Cache successes AND 429s: repeating a rate-limited request faster is
     // exactly what must not happen.
     if (resp.ok || resp.status === 429) {
