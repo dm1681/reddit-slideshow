@@ -22,6 +22,33 @@ subreddit listing; in a plain browser that is CORS-blocked by reddit.com and
 falls back to the demo with a toast — the packaged app routes `fetch` through
 native HTTP instead (`CapacitorHttp`).
 
+## Self-host on your LAN or tailnet (recommended for daily use)
+
+The serve script is a self-host server, not just a dev convenience: it serves
+the app **and proxies Reddit listing reads at `/reddit/`**, so the browser
+fetches same-origin and the CORS wall never comes up. Traffic to reddit.com
+leaves from the box you run it on — your residential IP, one person's volume,
+a 60s cache, an honest User-Agent, and only `r/{sub}.json` listing paths are
+proxied (nothing else relays).
+
+```sh
+cd mobile && npm install && npm run serve
+# it prints your LAN URL, e.g. http://192.168.1.20:4173/
+```
+
+- **Phone on the same Wi-Fi**: open the LAN URL; `?sub=EarthPorn` is live.
+- **From anywhere via Tailscale**: on the host, `tailscale serve 4173` — you
+  get an `https://<machine>.<tailnet>.ts.net` URL with a real certificate.
+  HTTPS is also what unlocks **Add to Home Screen as a standalone app**: the
+  manifest + service worker are in place, but browsers only install PWAs from
+  a secure context (plain `http://<lan-ip>` runs fine, it just won't install
+  standalone or work offline).
+- Installed over HTTPS, the app shell and demo work offline; live reads still
+  need the host reachable.
+- iOS Safari plays real Reddit video with audio natively (it picks
+  `hls_url`); browsers without native HLS get the silent fallback rendition —
+  an hls.js enhancement is the known fix, not built yet.
+
 ## Run it on a phone (Android)
 
 Requires Android Studio (or SDK + JDK) on your machine:

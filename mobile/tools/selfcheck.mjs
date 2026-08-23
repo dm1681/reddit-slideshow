@@ -288,6 +288,94 @@ await page.waitForTimeout(2200);
 
 check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
 
+// ---- self-host live path: app → /reddit/ proxy → (mock) Reddit upstream ----
+// reddit.com is not reachable from every dev environment, so the upstream is
+// a local mock serving a wire-shaped listing; everything else — the proxy,
+// the reddit source, the normalizer, the feed — is the real path.
+{
+  const { createServer } = await import("node:http");
+  const { spawn } = await import("node:child_process");
+  const { fileURLToPath } = await import("node:url");
+  const path = await import("node:path");
+
+  const APP_PORT = 4180;
+  const MOCK_PORT = 4181;
+
+  const listing = {
+    kind: "Listing",
+    data: {
+      after: null,
+      children: [
+        {
+          kind: "t3",
+          data: {
+            name: "t3_lan01", id: "lan01", title: "A live post through the proxy",
+            author: "lan_tester", subreddit: "lantest", score: 42, num_comments: 7,
+            created_utc: Date.now() / 1000 - 7200,
+            permalink: "/r/lantest/comments/lan01/a_live_post/",
+            url: `http://localhost:${APP_PORT}/demo/media/dolomites.jpg`,
+            domain: "i.redd.it", over_18: false, spoiler: false,
+            post_hint: "image", is_video: false, is_self: false,
+          },
+        },
+        {
+          kind: "t3",
+          data: {
+            name: "t3_lan02", id: "lan02", title: "And a text post",
+            author: "lan_tester", subreddit: "lantest", score: 5, num_comments: 1,
+            created_utc: Date.now() / 1000 - 3600,
+            permalink: "/r/lantest/comments/lan02/and_a_text_post/",
+            url: "https://www.reddit.com/r/lantest/comments/lan02/and_a_text_post/",
+            domain: "self.lantest", over_18: false, spoiler: false,
+            is_video: false, is_self: true, selftext: "Served by the mock upstream.",
+          },
+        },
+      ],
+    },
+  };
+
+  const mock = createServer((req, res) => {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify(listing));
+  }).listen(MOCK_PORT);
+
+  const serveScript = path.join(path.dirname(fileURLToPath(import.meta.url)), "serve.mjs");
+  const app = spawn(process.execPath, [serveScript], {
+    env: { ...process.env, PORT: String(APP_PORT), REDDIT_UPSTREAM: `http://localhost:${MOCK_PORT}` },
+    stdio: "ignore",
+  });
+  await new Promise((r) => setTimeout(r, 700));
+
+  // proxy discipline before the app: only listing paths pass
+  const bad = await fetch(`http://localhost:${APP_PORT}/reddit/api/v1/me`);
+  check("proxy refuses non-listing paths", bad.status === 400, String(bad.status));
+  await fetch(`http://localhost:${APP_PORT}/reddit/r/lantest.json?raw_json=1`);
+  const second = await fetch(`http://localhost:${APP_PORT}/reddit/r/lantest.json?raw_json=1`);
+  check("proxy caches repeat listing reads", second.headers.get("x-reel-cache") === "hit");
+
+  const live = await context.newPage();
+  const liveErrors = [];
+  live.on("pageerror", (e) => liveErrors.push(e.message));
+  await live.goto(`http://localhost:${APP_PORT}/?sub=lantest`);
+  await live.waitForTimeout(2200);
+  const s = await live.evaluate(() => ({
+    label: document.getElementById("source-label").textContent,
+    demoBadge: !!document.querySelector("#topbar .demo"),
+    slides: document.querySelectorAll(".slide:not(.endslide)").length,
+    counter: document.getElementById("counter").textContent,
+    activeType: document.querySelector(".slide.active")?.className,
+    imgLoaded: !!document.querySelector(".slide.active img.loaded"),
+  }));
+  check("live source is labelled r/lantest, no demo badge", s.label === "r/lantest" && !s.demoBadge, JSON.stringify(s));
+  check("live listing rendered through proxy + normalizer", s.slides === 2 && /^1 \/ 2$/.test(s.counter), JSON.stringify(s));
+  check("live image slide loaded", s.activeType?.includes("type-image") && s.imgLoaded, s.activeType);
+  check("no page errors on the live path", liveErrors.length === 0, liveErrors.join(" | "));
+
+  await live.close();
+  app.kill();
+  mock.close();
+}
+
 await browser.close();
 console.log(`\n${checks - failures.length}/${checks} checks passed`);
 if (failures.length) {

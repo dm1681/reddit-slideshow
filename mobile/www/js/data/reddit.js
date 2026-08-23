@@ -12,8 +12,23 @@ import { normalizeListing } from "../core/normalize.js";
 
 const LIMIT = 25;
 
+// In the packaged app, CapacitorHttp makes a direct reddit.com fetch work; in
+// a browser (LAN/Tailscale self-host) the same fetch is CORS-blocked, so the
+// serve.mjs host proxies listings at /reddit/ and we go same-origin.
+function isNative() {
+  return !!(
+    typeof window !== "undefined" &&
+    window.Capacitor &&
+    typeof window.Capacitor.isNativePlatform === "function" &&
+    window.Capacitor.isNativePlatform()
+  );
+}
+
 export function createRedditSource({ canHls, subreddit }) {
-  const base = `https://www.reddit.com/r/${encodeURIComponent(subreddit)}.json`;
+  const sub = encodeURIComponent(subreddit);
+  const base = isNative()
+    ? `https://www.reddit.com/r/${sub}.json`
+    : `reddit/r/${sub}.json`;
 
   return {
     id: `r/${subreddit}`,
@@ -21,12 +36,10 @@ export function createRedditSource({ canHls, subreddit }) {
     isDemo: false,
 
     async page(after) {
-      const url = new URL(base);
-      url.searchParams.set("raw_json", "1");
-      url.searchParams.set("limit", String(LIMIT));
-      if (after) url.searchParams.set("after", after);
+      const query = new URLSearchParams({ raw_json: "1", limit: String(LIMIT) });
+      if (after) query.set("after", after);
 
-      const resp = await fetch(url, {
+      const resp = await fetch(`${base}?${query}`, {
         headers: { Accept: "application/json" },
       });
       if (!resp.ok) {
