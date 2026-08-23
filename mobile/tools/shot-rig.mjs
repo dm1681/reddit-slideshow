@@ -9,11 +9,14 @@ const require = createRequire(import.meta.url);
 export const PHONE = { width: 390, height: 844 };
 
 export async function launchPhone({ record } = {}) {
+  // Phone-realistic autoplay policy: audible autoplay needs a gesture, so the
+  // muted-fallback + sound-pill path shows up in shots exactly as on device.
+  const opts = { args: ["--autoplay-policy=user-gesture-required"] };
   let browser;
   try {
-    browser = await chromium.launch();
+    browser = await chromium.launch(opts);
   } catch {
-    browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
+    browser = await chromium.launch({ ...opts, executablePath: "/opt/pw-browsers/chromium" });
   }
   const context = await browser.newContext({
     viewport: PHONE,

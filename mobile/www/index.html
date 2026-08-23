@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>Reel</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='4' fill='%2300e0c6'/%3E%3Cpath d='M6 4.5v7l5-3.5z' fill='%23000'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/reel.css">
+</head>
+<body>
+
+<div id="ticks" aria-hidden="true"></div>
+<div id="topbar">
+  <span class="pill"><span class="brand">Reel</span> <span id="source-label"></span></span>
+  <span class="spacer"></span>
+  <span class="pill" id="counter" aria-live="polite">–</span>
+  <button id="gear" aria-label="Settings">⚙</button>
+</div>
+
+<main id="feed" aria-label="Post feed"></main>
+
+<div id="dim" hidden></div>
+<div id="sheet" hidden role="dialog" aria-label="Playback settings">
+  <div class="handle"></div>
+  <h2>Playback</h2>
+  <div class="row">
+    <div class="grow"><div class="name">Auto-advance</div>
+      <div class="note">Videos play to the end; stills wait for the dwell below.</div></div>
+    <button id="set-auto" class="toggle" role="switch" aria-label="Auto-advance"><i></i></button>
+  </div>
+  <div class="row">
+    <div class="grow"><div class="name">Image dwell</div></div>
+    <input id="set-dwell" type="range" min="2000" max="20000" step="1000" aria-label="Image dwell">
+    <div class="value" id="set-dwell-value">5s</div>
+  </div>
+  <div class="row">
+    <div class="grow"><div class="name">Mask adult &amp; spoiler posts</div>
+      <div class="note">Masked posts stay hidden until you reveal them —
+        the file is never downloaded while masked.</div></div>
+    <button id="set-mask" class="toggle" role="switch" aria-label="Mask adult and spoiler posts"><i></i></button>
+  </div>
+  <div class="row">
+    <div class="grow"><div class="name">Source</div>
+      <div class="note">Add <code>?sub=EarthPorn</code> to the URL to try a live
+        subreddit (needs the packaged app or a proxy). Reddit sign-in lands
+        once API registration is sorted.</div></div>
+  </div>
+</div>
+
+<div id="toast" hidden role="status"></div>
+
+<script type="module" src="js/ui/app.js"></script>
+</body>
+</html>

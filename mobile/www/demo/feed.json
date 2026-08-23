@@ -1,0 +1,269 @@
+{
+  "kind": "Listing",
+  "data": {
+    "after": null,
+    "children": [
+      {
+        "kind": "t3",
+        "data": {
+          "name": "t3_demo01",
+          "id": "demo01",
+          "title": "Golden retriever discovers snow for the first time and refuses to come back inside",
+          "author": "pupsnaps",
+          "subreddit": "aww",
+          "subreddit_name_prefixed": "r/aww",
+          "score": 12437,
+          "num_comments": 843,
+          "created_utc": 1755903600,
+          "permalink": "/r/aww/comments/demo01/golden_retriever_discovers_snow/",
+          "url": "https://v.redd.it/demo01",
+          "domain": "v.redd.it",
+          "over_18": false,
+          "spoiler": false,
+          "link_flair_text": "Video",
+          "post_hint": "hosted:video",
+          "is_video": true,
+          "is_self": false,
+          "secure_media": {
+            "type": "v.redd.it",
+            "reddit_video": {
+              "fallback_url": "demo/media/dog-snow.webm?source=fallback",
+              "hls_url": "demo/media/dog-snow.webm",
+              "dash_url": "demo/media/dog-snow.webm",
+              "is_gif": false,
+              "duration": 6,
+              "width": 540,
+              "height": 960
+            }
+          }
+        }
+      },
+      {
+        "kind": "t3",
+        "data": {
+          "name": "t3_demo02",
+          "id": "demo02",
+          "title": "Sunrise over the Dolomites after three days of rain [OC] [4032×3024]",
+          "author": "alpen_glow",
+          "subreddit": "EarthPorn",
+          "subreddit_name_prefixed": "r/EarthPorn",
+          "score": 31904,
+          "num_comments": 402,
+          "created_utc": 1755889200,
+          "permalink": "/r/EarthPorn/comments/demo02/sunrise_over_the_dolomites/",
+          "url": "demo/media/dolomites.jpg",
+          "domain": "i.redd.it",
+          "over_18": false,
+          "spoiler": false,
+          "link_flair_text": "OC",
+          "post_hint": "image",
+          "is_video": false,
+          "is_self": false,
+          "preview": {
+            "images": [
+              {
+                "source": { "url": "demo/media/dolomites.jpg", "width": 1080, "height": 1440 },
+                "resolutions": [
+                  { "url": "demo/media/dolomites.jpg", "width": 108, "height": 144 }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      {
+        "kind": "t3",
+        "data": {
+          "name": "t3_demo03",
+          "id": "demo03",
+          "title": "Espresso extraction at 120 fps, cut to a perfect loop",
+          "author": "tamped",
+          "subreddit": "oddlysatisfying",
+          "subreddit_name_prefixed": "r/oddlysatisfying",
+          "score": 8104,
+          "num_comments": 96,
+          "created_utc": 1755918000,
+          "permalink": "/r/oddlysatisfying/comments/demo03/espresso_extraction_perfect_loop/",
+          "url": "https://v.redd.it/demo03",
+          "domain": "v.redd.it",
+          "over_18": false,
+          "spoiler": false,
+          "link_flair_text": "Perfect Loop",
+          "post_hint": "hosted:video",
+          "is_video": true,
+          "is_self": false,
+          "secure_media": {
+            "type": "v.redd.it",
+            "reddit_video": {
+              "fallback_url": "demo/media/espresso-loop.webm?source=fallback",
+              "hls_url": "demo/media/espresso-loop.webm",
+              "dash_url": "demo/media/espresso-loop.webm",
+              "is_gif": true,
+              "duration": 2.4,
+              "width": 540,
+              "height": 960
+            }
+          }
+        }
+      },
+      {
+        "kind": "t3",
+        "data": {
+          "name": "t3_demo04",
+          "id": "demo04",
+          "title": "Aftermath of the refinery fire — aerial footage",
+          "author": "dronewatch",
+          "subreddit": "CatastrophicFailure",
+          "subreddit_name_prefixed": "r/CatastrophicFailure",
+          "score": 5391,
+          "num_comments": 1204,
+          "created_utc": 1755910800,
+          "permalink": "/r/CatastrophicFailure/comments/demo04/aftermath_of_the_refinery_fire/",
+          "url": "https://v.redd.it/demo04",
+          "domain": "v.redd.it",
+          "over_18": true,
+          "spoiler": false,
+          "link_flair_text": "Fire/Explosion",
+          "post_hint": "hosted:video",
+          "is_video": true,
+          "is_self": false,
+          "secure_media": {
+            "type": "v.redd.it",
+            "reddit_video": {
+              "fallback_url": "demo/media/refinery.webm?source=fallback",
+              "hls_url": "demo/media/refinery.webm",
+              "dash_url": "demo/media/refinery.webm",
+              "is_gif": false,
+              "duration": 5,
+              "width": 540,
+              "height": 960
+            }
+          }
+        }
+      },
+      {
+        "kind": "t3",
+        "data": {
+          "name": "t3_demo05",
+          "id": "demo05",
+          "title": "Restored my grandfather's 1974 Leica back to working order",
+          "author": "rangefinder",
+          "subreddit": "AnalogCommunity",
+          "subreddit_name_prefixed": "r/AnalogCommunity",
+          "score": 2311,
+          "num_comments": 187,
+          "created_utc": 1755849600,
+          "permalink": "/r/AnalogCommunity/comments/demo05/restored_my_grandfathers_1974_leica/",
+          "url": "https://www.reddit.com/gallery/demo05",
+          "domain": "reddit.com",
+          "over_18": false,
+          "spoiler": false,
+          "link_flair_text": null,
+          "is_video": false,
+          "is_self": false,
+          "is_gallery": true,
+          "gallery_data": {
+            "items": [
+              { "media_id": "demoleica1", "id": 1 },
+              { "media_id": "demoleica2", "id": 2 },
+              { "media_id": "demoleica3", "id": 3 }
+            ]
+          },
+          "media_metadata": {
+            "demoleica1": {
+              "status": "valid", "e": "Image", "m": "image/jpg", "id": "demoleica1",
+              "s": { "x": 1080, "y": 1350, "u": "demo/media/leica-1.jpg" }
+            },
+            "demoleica2": {
+              "status": "valid", "e": "Image", "m": "image/jpg", "id": "demoleica2",
+              "s": { "x": 1080, "y": 1350, "u": "demo/media/leica-2.jpg" }
+            },
+            "demoleica3": {
+              "status": "valid", "e": "Image", "m": "image/jpg", "id": "demoleica3",
+              "s": { "x": 1080, "y": 1350, "u": "demo/media/leica-3.jpg" }
+            }
+          }
+        }
+      },
+      {
+        "kind": "t3",
+        "data": {
+          "name": "t3_demo06",
+          "id": "demo06",
+          "title": "The finale twist, visualized — do not open before episode 8",
+          "author": "plotcharts",
+          "subreddit": "television",
+          "subreddit_name_prefixed": "r/television",
+          "score": 942,
+          "num_comments": 355,
+          "created_utc": 1755896400,
+          "permalink": "/r/television/comments/demo06/the_finale_twist_visualized/",
+          "url": "demo/media/finale.jpg",
+          "domain": "i.redd.it",
+          "over_18": false,
+          "spoiler": true,
+          "link_flair_text": null,
+          "post_hint": "image",
+          "is_video": false,
+          "is_self": false
+        }
+      },
+      {
+        "kind": "t3",
+        "data": {
+          "name": "t3_demo07",
+          "id": "demo07",
+          "title": "TIL the Moon is drifting away from Earth at about the speed fingernails grow",
+          "author": "apogee_fan",
+          "subreddit": "todayilearned",
+          "subreddit_name_prefixed": "r/todayilearned",
+          "score": 15230,
+          "num_comments": 612,
+          "created_utc": 1755882000,
+          "permalink": "/r/todayilearned/comments/demo07/til_the_moon_is_drifting_away/",
+          "url": "https://www.reddit.com/r/todayilearned/comments/demo07/til_the_moon_is_drifting_away/",
+          "domain": "self.todayilearned",
+          "over_18": false,
+          "spoiler": false,
+          "link_flair_text": null,
+          "is_video": false,
+          "is_self": true,
+          "selftext": "Lunar laser ranging — bouncing lasers off the retroreflectors Apollo left behind — puts the drift at about 3.8 cm per year.\n\nThe kicker: it hasn't always been this fast. Tidal rhythmites suggest the rate today is unusually high because the Atlantic's current shape happens to resonate with the tides.\n\nIn about 600 million years the Moon will appear too small from Earth to fully cover the Sun, and total solar eclipses end forever."
+        }
+      },
+      {
+        "kind": "t3",
+        "data": {
+          "name": "t3_demo08",
+          "id": "demo08",
+          "title": "The registry has approved the first new wave of TLDs in a decade — here's what changes",
+          "author": "dnswatcher",
+          "subreddit": "technology",
+          "subreddit_name_prefixed": "r/technology",
+          "score": 4187,
+          "num_comments": 529,
+          "created_utc": 1755864000,
+          "permalink": "/r/technology/comments/demo08/first_new_wave_of_tlds/",
+          "url": "https://example.com/2026/08/new-tlds-approved",
+          "domain": "example.com",
+          "over_18": false,
+          "spoiler": false,
+          "link_flair_text": "Networking",
+          "post_hint": "link",
+          "is_video": false,
+          "is_self": false,
+          "preview": {
+            "images": [
+              {
+                "source": { "url": "demo/media/tech-thumb.jpg", "width": 640, "height": 360 },
+                "resolutions": [
+                  { "url": "demo/media/tech-thumb.jpg", "width": 108, "height": 61 }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    ]
+  }
+}
