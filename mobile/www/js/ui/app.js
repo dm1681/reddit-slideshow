@@ -8,6 +8,7 @@ import { Settings } from "../core/settings.js";
 import { createFeed } from "../core/feed.js";
 import { createDemoSource } from "../data/demo.js";
 import { createRedditSource } from "../data/reddit.js";
+import { createSessionSource } from "../data/session.js";
 import { createChrome } from "./chrome.js";
 import { createPager } from "./pager.js";
 
@@ -15,6 +16,20 @@ const canHls = detectHls();
 
 async function pickFeed(toastLater) {
   const params = new URLSearchParams(location.search);
+
+  // A feed captured from a signed-in Reddit tab by tools/reddit-scrape-probe.js.
+  // Reddit's public endpoints answer scripted clients with a bot check, so a
+  // session a human already cleared is the only route to live content.
+  if (params.get("source") === "session") {
+    const feed = createFeed(createSessionSource());
+    try {
+      await feed.start();
+      return feed;
+    } catch (e) {
+      toastLater(`${e.message} — showing the demo feed`);
+    }
+  }
+
   const sub = (params.get("sub") || "").replace(/^r\//, "").trim();
   if (sub) {
     const feed = createFeed(createRedditSource({ canHls, subreddit: sub }));

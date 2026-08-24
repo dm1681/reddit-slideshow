@@ -630,5 +630,45 @@
       ? "WORKS: posts scraped AND /api/info.json enrichment succeeded — a signed-in WebView can run the whole pipeline."
       : "PARTIAL: posts scraped, but /api/info.json returned nothing — likely signed out. Media would show; vote/save/comment counts would not.";
   console.log("%c" + verdict, "font-weight:700");
+
+  // ---- hand the capture to Reel -------------------------------------------
+  // The local self-host server holds it as a feed; the app reads it back. If
+  // the POST cannot go through (server not running, or the browser refusing a
+  // request from https: to a local address), the capture goes to the clipboard
+  // instead so the scrape is never lost.
+  const REEL = "http://localhost:4173";
+  if (report.postsAfterResolving > 0) {
+    const parts = location.pathname.split("/").filter(Boolean);
+    const payload = JSON.stringify({
+      posts: enriched,
+      source: parts[0] === "r" && parts[1] ? "r/" + parts[1] : "reddit session",
+    });
+    try {
+      const sent = await fetch(REEL + "/session/ingest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: payload,
+      });
+      const answer = await sent.json();
+      if (!sent.ok) throw new Error(answer.error || sent.status);
+      console.log(
+        "%c Sent " + answer.posts + " posts to Reel -> open " + REEL + "/?source=session ",
+        "background:#00e0c6;color:#000;font-weight:700"
+      );
+    } catch (e) {
+      console.warn("Could not reach Reel at " + REEL + " (" + e.message + ").");
+      try {
+        copy(payload);
+        console.log(
+          "%c The capture is on your clipboard. Start the server and run this again, " +
+            "or save it as mobile/www/demo/.session-feed.json ",
+          "background:#ffb02e;color:#000;font-weight:700"
+        );
+      } catch (e2) {
+        console.log("Capture is the returned object below.");
+      }
+    }
+  }
+
   return report;
 })();

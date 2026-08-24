@@ -86,6 +86,46 @@ npx cap run android    # build + install on a connected device
 `npx cap sync` re-copies `www/` after changes. iOS is the same dance with
 `@capacitor/ios` and a Mac.
 
+## Live content from your own Reddit session (works today)
+
+Reddit's public endpoints answer scripted clients with a bot check, so live
+posts cannot come from the proxy — they have to come from a session a human
+has cleared and signed into. The bridge does exactly that, using the
+extension's own scraper:
+
+1. Start the server: `npm run serve`
+2. Open a Reddit feed you are **signed in to** in your normal browser (e.g.
+   `https://www.reddit.com/r/EarthPorn/`) and scroll once so posts render.
+3. Open DevTools (F12) → Console, paste all of
+   `tools/reddit-scrape-probe.js`, press Enter.
+4. It prints what it found and POSTs the capture to the server. Open
+   **`http://localhost:4173/?source=session`** — or the LAN URL on your phone —
+   and the feed is your real posts.
+
+Regenerate the probe after any change to the extension's scraper:
+`npm run probe`.
+
+What the bridge is and is not:
+
+- It **never talks to Reddit**. It holds what your browser scraped, on your
+  machine, in `www/demo/.session-feed.json` (gitignored). Re-run the probe to
+  refresh it.
+- Captured feeds are **read-only**: voting and saving need the Reddit tab's
+  session, which the app does not hold, so those buttons report that plainly
+  instead of failing silently.
+- `embed` posts (YouTube and friends) become link cards — a cross-origin
+  player does not belong in a swipe feed.
+- Reddit-hosted video is resolved through `/media/vreddit`, which reads the
+  DASH manifest server-side and picks the highest-bandwidth rendition. Those
+  renditions are video-only by construction, so such clips play silent; audio
+  is a separate stream and joining them is not built yet.
+- The adult/spoiler gate applies to captured posts exactly as it does to the
+  demo: flags come across from the scrape, and a masked post's file is never
+  requested until you reveal it.
+
+This is the same pipeline the planned in-app WebView would run — the browser
+is standing in for it, which is what makes it testable before any APK exists.
+
 ## Live Reddit content: the WebView path
 
 Reddit's public listing endpoints are closed to scripted clients (see the
