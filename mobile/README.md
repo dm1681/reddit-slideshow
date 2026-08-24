@@ -22,7 +22,7 @@ subreddit listing; in a plain browser that is CORS-blocked by reddit.com and
 falls back to the demo with a toast — the packaged app routes `fetch` through
 native HTTP instead (`CapacitorHttp`).
 
-## Self-host on your LAN or tailnet (recommended for daily use)
+## Self-host on your LAN (recommended for daily use)
 
 The serve script is a self-host server, not just a dev convenience: it serves
 the app **and proxies Reddit listing reads at `/reddit/`**, so the browser
@@ -56,13 +56,18 @@ cd mobile && npm install && npm run serve
 - **Phone on the same Wi-Fi**: open the LAN URL — the demo feed works fully.
   `?sub=EarthPorn` exercises the real listing path, which today ends at the
   bot wall above and falls back to the demo with a message.
-- **From anywhere via Tailscale**: on the host, `tailscale serve 4173` — you
-  get an `https://<machine>.<tailnet>.ts.net` URL with a real certificate.
-  HTTPS is also what unlocks **Add to Home Screen as a standalone app**: the
-  manifest + service worker are in place, but browsers only install PWAs from
-  a secure context (plain `http://<lan-ip>` runs fine, it just won't install
-  standalone or work offline).
-- Installed over HTTPS, the app shell and demo work offline.
+- **If the phone cannot reach the LAN URL**, check the phone's VPN first: a
+  consumer VPN client usually routes every packet through the tunnel and
+  blocks local-network addresses unless its "allow local network" setting is
+  on. Turning that on, or dropping the VPN while on your own Wi-Fi, is
+  normally all it takes.
+- **Off-LAN access is deliberately left open.** Any HTTPS route to the host
+  works — a reverse proxy with a real certificate, your router's VPN, or
+  whatever remote-access setup you already run. Serving over HTTPS is also
+  what unlocks **Add to Home Screen as a standalone app**: the manifest and
+  service worker are in place, but browsers only install PWAs from a secure
+  context (plain `http://<lan-ip>` runs fine, it just will not install
+  standalone or work offline). Over HTTPS the app shell and demo work offline.
 - Once a live path lands, iOS Safari plays Reddit video with audio natively
   (it picks `hls_url`); browsers without native HLS would get the silent
   fallback rendition — hls.js is the known fix, not built yet.
