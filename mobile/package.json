@@ -8,7 +8,8 @@
     "shoot:real": "node tools/shoot-real.mjs",
     "test": "node tools/selfcheck.mjs",
     "demo:media": "node tools/make-demo-media.mjs",
-    "shoot:compare": "node tools/compare.mjs"
+    "shoot:compare": "node tools/compare.mjs",
+    "probe": "node tools/make-scrape-probe.mjs"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.5.0",

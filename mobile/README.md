@@ -81,6 +81,23 @@ npx cap run android    # build + install on a connected device
 `npx cap sync` re-copies `www/` after changes. iOS is the same dance with
 `@capacitor/ios` and a Mac.
 
+## Live Reddit content: the WebView path
+
+Reddit's public listing endpoints are closed to scripted clients (see the
+self-host note above), so live content cannot come from a proxy. The route
+that does work is the extension's: read posts out of a Reddit page a signed-in
+human is looking at — on mobile, an in-app WebView the user signs into once.
+
+`docs/superpowers/specs/2026-08-23-webview-spike.md` has the spike: an iframe
+is impossible (`X-Frame-Options: SAMEORIGIN`), a fresh session must clear a
+human check itself, and the extension's scrape pipeline ports **unchanged**
+(proven by extracting and running it).
+
+`npm run probe` regenerates `tools/reddit-scrape-probe.js` — a read-only
+console snippet that reports what a WebView-based Reel would see from your own
+logged-in session. Paste it into DevTools on a Reddit feed to check the
+browser half yourself.
+
 ## What's deliberately NOT here yet
 
 - **Reddit sign-in (OAuth)** — and with it real votes/saves. Blocked on the
